@@ -141,6 +141,14 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
     }
 
     /**
+     * Returns true if this key's EC field is an instance of ECFieldF2m.
+     * @return true if the field is an instance of ECFieldF2m, false otherwise
+     */
+    boolean isECFieldF2m() {
+        return this.params.getCurve().getField() instanceof ECFieldF2m;
+    }
+
+    /**
      * Returns the native EC public key context pointer.
      * @return the native EC public key context pointer or -1 on error
      */
@@ -148,16 +156,15 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
         if (nativeECKey == 0x0) {
             synchronized (this) {
                 if (nativeECKey == 0x0) {
-                    ECParameterSpec parameters = this.getParams();
-                    ECPoint generator = parameters.getGenerator();
-                    EllipticCurve curve = parameters.getCurve();
+                    ECPoint generator = this.params.getGenerator();
+                    EllipticCurve curve = this.params.getCurve();
                     ECField field = curve.getField();
                     byte[] a = curve.getA().toByteArray();
                     byte[] b = curve.getB().toByteArray();
                     byte[] gx = generator.getAffineX().toByteArray();
                     byte[] gy = generator.getAffineY().toByteArray();
-                    byte[] n = parameters.getOrder().toByteArray();
-                    byte[] h = BigInteger.valueOf(parameters.getCofactor()).toByteArray();
+                    byte[] n = this.params.getOrder().toByteArray();
+                    byte[] h = BigInteger.valueOf(this.params.getCofactor()).toByteArray();
                     byte[] p = new byte[0];
                     int fieldType = 0;
                     if (field instanceof ECFieldFp) {
@@ -167,12 +174,14 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
                         fieldType = 1;
                         p = ((ECFieldF2m)field).getReductionPolynomial().toByteArray();
                         nativeECKey = nativeCrypto.ECEncodeGF2m(a, a.length, b, b.length, p, p.length, gx, gx.length, gy, gy.length, n, n.length, h, h.length);
+                    } else {
+                        nativeECKey = -1;
                     }
-                    if (nativeECKey > 0)  {
+                    if (nativeECKey != -1) {
                         nativeCrypto.createECKeyCleaner(this, nativeECKey);
-                        byte[] x = this.getW().getAffineX().toByteArray();
-                        byte[] y = this.getW().getAffineY().toByteArray();
-                        if (nativeCrypto.ECCreatePublicKey(nativeECKey, x, x.length, y, y.length, fieldType) < 0) {
+                        byte[] x = this.w.getAffineX().toByteArray();
+                        byte[] y = this.w.getAffineY().toByteArray();
+                        if (nativeCrypto.ECCreatePublicKey(nativeECKey, x, x.length, y, y.length, fieldType) == -1) {
                             nativeECKey = -1;
                         }
                     }

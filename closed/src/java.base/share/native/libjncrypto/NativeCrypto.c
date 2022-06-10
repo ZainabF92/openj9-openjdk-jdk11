@@ -70,6 +70,7 @@ int OSSL102_RSA_set0_crt_params(RSA *, BIGNUM *, BIGNUM *, BIGNUM *);
 #endif
 
 /* Header for EC algorithm */
+int OSSL_NO_EC2M = 0;
 int setECPublicCoordinates(EC_KEY *, BIGNUM *, BIGNUM *, int);
 int setECPublicKey(EC_KEY *, BIGNUM *, BIGNUM *, int);
 
@@ -432,8 +433,6 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
     OSSL_EC_GROUP_new_curve_GF2m = (OSSL_EC_GROUP_new_curve_GF2m_t*)find_crypto_symbol(crypto_library, "EC_GROUP_new_curve_GF2m");
     OSSL_EC_KEY_set_group = (OSSL_EC_KEY_set_group_t*)find_crypto_symbol(crypto_library, "EC_KEY_set_group");
     OSSL_EC_POINT_new = (OSSL_EC_POINT_new_t*)find_crypto_symbol(crypto_library, "EC_POINT_new");
-    OSSL_EC_POINT_set_affine_coordinates_GFp = (OSSL_EC_POINT_set_affine_coordinates_GFp_t*)find_crypto_symbol(crypto_library, "EC_POINT_set_affine_coordinates_GFp");
-    OSSL_EC_POINT_set_affine_coordinates_GF2m = (OSSL_EC_POINT_set_affine_coordinates_GF2m_t*)find_crypto_symbol(crypto_library, "EC_POINT_set_affine_coordinates_GF2m");
     OSSL_EC_GROUP_set_generator = (OSSL_EC_GROUP_set_generator_t*)find_crypto_symbol(crypto_library, "EC_GROUP_set_generator");
     OSSL_EC_KEY_get0_group = (OSSL_EC_KEY_get0_group_t*)find_crypto_symbol(crypto_library, "EC_KEY_get0_group");
     OSSL_EC_POINT_free = (OSSL_EC_POINT_free_t*)find_crypto_symbol(crypto_library, "EC_POINT_free");
@@ -441,11 +440,23 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
     OSSL_BN_CTX_free = (OSSL_BN_CTX_free_t*)find_crypto_symbol(crypto_library, "BN_CTX_free");
     OSSL_EC_KEY_set_public_key = (OSSL_EC_KEY_set_public_key_t*)find_crypto_symbol(crypto_library, "EC_KEY_set_public_key");
     OSSL_EC_KEY_check_key = (OSSL_EC_KEY_check_key_t*)find_crypto_symbol(crypto_library, "EC_KEY_check_key");
+    OSSL_EC_POINT_set_affine_coordinates_GFp = (OSSL_EC_POINT_set_affine_coordinates_GFp_t*)find_crypto_symbol(crypto_library, "EC_POINT_set_affine_coordinates");
     if (NULL == OSSL_EC_KEY_set_public_key_affine_coordinates) {
         /* method missing in OpenSSL version 1.0.0 */
         EC_set_public_key = &setECPublicKey;
     } else {
         EC_set_public_key = &setECPublicCoordinates;
+    }
+    if (NULL == OSSL_EC_POINT_set_affine_coordinates_GFp) {
+        /* deprecated in OpenSSL version 1.1.1 */
+        OSSL_EC_POINT_set_affine_coordinates_GFp = (OSSL_EC_POINT_set_affine_coordinates_GFp_t*)find_crypto_symbol(crypto_library, "EC_POINT_set_affine_coordinates_GFp");
+        OSSL_EC_POINT_set_affine_coordinates_GF2m = (OSSL_EC_POINT_set_affine_coordinates_GF2m_t*)find_crypto_symbol(crypto_library, "EC_POINT_set_affine_coordinates_GF2m");
+    } else {
+        OSSL_EC_POINT_set_affine_coordinates_GF2m = (OSSL_EC_POINT_set_affine_coordinates_GF2m_t*)find_crypto_symbol(crypto_library, "EC_POINT_set_affine_coordinates");
+    }
+    if ((NULL == OSSL_EC_GROUP_new_curve_GF2m) || (NULL == OSSL_EC_POINT_set_affine_coordinates_GF2m)) {
+        /* the OPENSSL_NO_EC2M flag is set and the EC2m methods are unavailable */
+        OSSL_NO_EC2M = 1;
     }
 
     if ((NULL == OSSL_error_string) ||
@@ -496,11 +507,9 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
         (NULL == OSSL_EC_KEY_set_private_key) ||
         (NULL == OSSL_BN_CTX_new) ||
         (NULL == OSSL_EC_GROUP_new_curve_GFp) ||
-        (NULL == OSSL_EC_GROUP_new_curve_GF2m) ||
         (NULL == OSSL_EC_KEY_set_group) ||
         (NULL == OSSL_EC_POINT_new) ||
         (NULL == OSSL_EC_POINT_set_affine_coordinates_GFp) ||
-        (NULL == OSSL_EC_POINT_set_affine_coordinates_GF2m) ||
         (NULL == OSSL_EC_GROUP_set_generator) ||
         (NULL == OSSL_EC_KEY_get0_group) ||
         (NULL == OSSL_EC_POINT_free) ||
@@ -2232,6 +2241,19 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_ChaCha20FinalDec
     }
 }
 
+/* Returns true if EC 2m is disabled, and false otherwise.
+ *
+ * Class:     jdk_crypto_jniprovider_NativeCrypto
+ * Method:    ECNoGF2m
+ * Signature: ()Z
+ */
+JNIEXPORT jboolean JNICALL
+Java_jdk_crypto_jniprovider_NativeCrypto_ECNoGF2m
+  (JNIEnv *env, jclass obj)
+{
+    return OSSL_NO_EC2M;
+}
+
 /* Create an EC Public Key
  *
  * Class:     jdk_crypto_jniprovider_NativeCrypto
@@ -2518,6 +2540,10 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECEncodeGF2m
     BN_CTX *ctx = NULL;
     int ret = 0;
 
+    if (OSSL_NO_EC2M) {
+        return -1;
+    }
+
     nativeA = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, a, 0));
     if (NULL == nativeA) {
         return -1;
@@ -2727,6 +2753,10 @@ setECPublicKey(EC_KEY *key, BIGNUM *x, BIGNUM *y, int field)
     BN_CTX *ctx = (*OSSL_BN_CTX_new)();
     EC_POINT *publicKey = (*OSSL_EC_POINT_new)(group);
     int ret = 0;
+
+    if (OSSL_NO_EC2M && field) {
+        return ret;
+    }
 
     if ((NULL == ctx) || (NULL == group) || (NULL == publicKey)) {
         (*OSSL_BN_CTX_free)(ctx);

@@ -31,6 +31,8 @@
 
 package sun.security.ec;
 
+import java.lang.reflect.Method;
+import java.security.AlgorithmParameters;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
@@ -39,8 +41,12 @@ import java.security.PrivateKey;
 import java.security.ProviderException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.interfaces.ECKey;
 import java.security.spec.AlgorithmParameterSpec;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
+import java.security.spec.InvalidParameterSpecException;
+import java.util.HashMap;
 
 import javax.crypto.KeyAgreementSpi;
 import javax.crypto.SecretKey;
@@ -49,7 +55,22 @@ import javax.crypto.spec.SecretKeySpec;
 
 import jdk.crypto.jniprovider.NativeCrypto;
 
+import sun.security.action.GetPropertyAction;
+import sun.security.util.NamedCurve;
+
+/**
+* Native KeyAgreement implementation for ECDH.
+*/
 public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
+
+    private static final NativeCrypto nativeCrypto = NativeCrypto.getNativeCrypto();
+    private static final String nativeCryptTrace = GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace");
+
+    /* true if OPENSSL_NO_EC2M is defined */
+    private static final boolean noGF2m = nativeCrypto.ECNoGF2m();
+
+    /* stores whether a curve is supported by OpenSSL (true) or not (false) */
+    private static final HashMap<String, Boolean> curveSupported = new HashMap<>();
 
     /* private key, if initialized */
     private ECPrivateKeyImpl privateKey;
@@ -57,10 +78,14 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
     /* public key, non-null between doPhase() & generateSecret() only */
     private ECPublicKeyImpl publicKey;
 
+    /* the type of EC curve */
+    private String curve;
+
     /* length of the secret to be derived */
     private int secretLen;
 
-    private static final NativeCrypto nativeCrypto = NativeCrypto.getNativeCrypto();
+    /* the java implementation, initialized if needed */
+    private ECDHKeyAgreement javaImplementation;
 
     /**
      * Constructs a new NativeECDHKeyAgreement.
@@ -75,9 +100,38 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
             throw new InvalidKeyException
                 ("Key must be an instance of PrivateKey");
         }
-        // attempt to translate the key if it is not an ECKey
+        /* attempt to translate the key if it is not an ECKey */
         this.privateKey = (ECPrivateKeyImpl) ECKeyFactory.toECKey(key);
         this.publicKey = null;
+
+        ECParameterSpec params = this.privateKey.getParams();
+        if (params instanceof NamedCurve) {
+            this.curve = ((NamedCurve) params).getName();
+        } else {
+            /* use the OID */
+            try {
+                AlgorithmParameters algParams = AlgorithmParameters.getInstance("EC");
+                algParams.init(this.privateKey.getParams());
+                this.curve = algParams.getParameterSpec(ECGenParameterSpec.class).getName();
+            } catch (NoSuchAlgorithmException e) {
+                /* should not happen */
+            } catch (InvalidParameterSpecException e) {
+                System.out.println(e.toString());
+            }
+        }
+
+        if (noGF2m && this.privateKey.isECFieldF2m()) {
+            if (curveSupported.containsKey("EC2m")) {
+                this.useJavaImplementation(key, random, null);
+            } else {
+                curveSupported.put("EC2m", false);
+                this.useJavaImplementation(key, random, "EC2m");
+            }
+        } else if (curveSupported.containsKey(this.curve) && curveSupported.get(this.curve).equals(false)) {
+            this.useJavaImplementation(key, random, null);
+        } else {
+            this.javaImplementation = null;
+        }
     }
 
     @Override
@@ -93,6 +147,9 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
     @Override
     protected Key engineDoPhase(Key key, boolean lastPhase)
             throws InvalidKeyException, IllegalStateException {
+        if (this.javaImplementation != null) {
+            return this.javaImplementation.engineDoPhase(key, lastPhase);
+        }
         if (this.privateKey == null) {
             throw new IllegalStateException("Not initialized");
         }
@@ -107,7 +164,7 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
             throw new InvalidKeyException
                 ("Key must be an instance of PublicKey");
         }
-        // attempt to translate the key if it is not an ECKey
+        /* attempt to translate the key if it is not an ECKey */
         this.publicKey = (ECPublicKeyImpl) ECKeyFactory.toECKey(key);
 
         ECParameterSpec params = this.publicKey.getParams();
@@ -119,6 +176,9 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
 
     @Override
     protected byte[] engineGenerateSecret() throws IllegalStateException {
+        if (this.javaImplementation != null) {
+            return this.javaImplementation.engineGenerateSecret();
+        }
         byte[] secret = new byte[this.secretLen];
         try {
             engineGenerateSecret(secret, 0);
@@ -131,6 +191,9 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
     @Override
     protected int engineGenerateSecret(byte[] sharedSecret, int offset)
             throws IllegalStateException, ShortBufferException {
+        if (this.javaImplementation != null) {
+            return this.javaImplementation.engineGenerateSecret(sharedSecret, offset);
+        }
         if ((offset + this.secretLen) > sharedSecret.length) {
             throw new ShortBufferException("Need " + this.secretLen
                 + " bytes, only " + (sharedSecret.length - offset)
@@ -141,14 +204,30 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
         }
         long nativePublicKey = this.publicKey.getNativePtr();
         long nativePrivateKey = this.privateKey.getNativePtr();
-        if ((nativePublicKey < 0) || (nativePrivateKey < 0)) {
-            throw new ProviderException("Could not convert keys to native format");
+        if ((nativePublicKey == -1) || (nativePrivateKey == -1)) {
+            if (curveSupported.containsKey(this.curve)) {
+                throw new ProviderException("Could not convert keys to native format");
+            } else {
+                curveSupported.put(this.curve, false);
+                try {
+                    this.useJavaImplementation(this.privateKey, null, this.curve);
+                    this.javaImplementation.engineDoPhase(this.publicKey, true);
+                } catch (InvalidKeyException e) {
+                    System.out.println(e.toString());
+                }
+                return this.javaImplementation.engineGenerateSecret(sharedSecret, offset);
+            }
+        } else if (!curveSupported.containsKey(this.curve)) {
+            curveSupported.put(this.curve, true);
+            if (nativeCryptTrace != null) {
+                System.err.println(this.curve + " is supported by OpenSSL, using native crypto implementation.");
+            }
         }
         int ret;
         synchronized (this.privateKey) {
             ret = nativeCrypto.ECDeriveKey(nativePublicKey, nativePrivateKey, sharedSecret, offset, this.secretLen);
         }
-        if (ret < 0) {
+        if (ret == -1) {
             throw new ProviderException("Could not derive key");
         }
         return this.secretLen;
@@ -166,5 +245,20 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
                 ("Only supported for algorithm TlsPremasterSecret");
         }
         return new SecretKeySpec(engineGenerateSecret(), "TlsPremasterSecret");
+    }
+
+    /**
+     * Initializes the java implementation and prints to the console.
+     *
+     * @param key the private key
+     * @param random source of randomness
+     * @param type the type of key that is not supported
+     */
+    private void useJavaImplementation (Key key, SecureRandom random, String type) throws InvalidKeyException {
+        this.javaImplementation = new ECDHKeyAgreement();
+        this.javaImplementation.engineInit(key, random);
+        if ((type != null) && (nativeCryptTrace != null)) {
+            System.err.println(type + " is not supported by OpenSSL, using Java crypto implementation.");
+        }
     }
 }
