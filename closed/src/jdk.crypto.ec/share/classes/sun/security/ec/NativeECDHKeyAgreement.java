@@ -245,6 +245,7 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
             ret = nativeCrypto.ECDeriveKey(nativePublicKey, nativePrivateKey, sharedSecret, offset, this.secretLen);
         }
         if (ret == -1) {
+            System.out.println("curve: " + this.curve);
             throw new ProviderException("Could not derive key");
         }
         this.publicKey = null;

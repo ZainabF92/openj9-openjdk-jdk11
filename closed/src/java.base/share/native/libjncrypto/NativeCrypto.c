@@ -2721,6 +2721,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
 
     nativeSecret = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, secret, 0));
     if (NULL == nativeSecret) {
+        printf("native error: could not get secret byte array");
         return -1;
     }
 
@@ -2730,6 +2731,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
     (*env)->ReleasePrimitiveArrayCritical(env, secret, nativeSecret, 0);
 
     if (0 == ret) {
+        printf("native error: OSSL_ECDH_compute_key failed");
         return -1;
     }
 
