@@ -2733,6 +2733,9 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
     if (0 == ret) {
         printErrors();
         printf("native error: OSSL_ECDH_compute_key failed");
+        if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
+            printf("native error: public key is NULL");
+        }
         return -1;
     }
 
