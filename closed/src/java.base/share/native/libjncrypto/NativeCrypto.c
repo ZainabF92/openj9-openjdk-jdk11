@@ -2731,6 +2731,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
     (*env)->ReleasePrimitiveArrayCritical(env, secret, nativeSecret, 0);
 
     if (0 == ret) {
+        printErrors();
         printf("native error: OSSL_ECDH_compute_key failed");
         return -1;
     }
