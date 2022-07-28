@@ -2302,6 +2302,12 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECCreatePublicKey
         return -1;
     }
 
+    if ((*OSSL_EC_KEY_get0_public_key)(publicKey) == NULL) {
+        printf("native error: public key is NULL (creating)\n");
+    } else {
+        printf("native: public key is good (creating)\n");
+    }
+
     return 0;
 }
 
@@ -2725,6 +2731,10 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
         return -1;
     }
 
+    if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
+        printf("native error: public key is NULL (before)\n");
+    }
+
     /* Derive the shared secret */
     ret = (*OSSL_ECDH_compute_key)((nativeSecret + secretOffset), secretLen, (*OSSL_EC_KEY_get0_public_key)(nativePublicKey), nativePrivateKey, NULL);
 
@@ -2732,9 +2742,9 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
 
     if (0 == ret) {
         printErrors();
-        printf("native error: OSSL_ECDH_compute_key failed");
+        printf("native error: OSSL_ECDH_compute_key failed\n");
         if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
-            printf("native error: public key is NULL");
+            printf("native error: public key is NULL (after)\n");
         }
         return -1;
     }
