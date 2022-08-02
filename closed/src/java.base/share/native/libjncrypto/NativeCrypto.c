@@ -2702,6 +2702,9 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDestroyKey
   (JNIEnv *env, jclass obj, jlong key)
 {
     EC_KEY *nativeKey = (EC_KEY*)(intptr_t) key;
+
+    printf("native error: public key is destroyed\n");
+
     if (NULL == nativeKey) {
         return -1;
     }
