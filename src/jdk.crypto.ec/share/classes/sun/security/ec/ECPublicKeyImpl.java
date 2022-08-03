@@ -153,9 +153,12 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
      * @return the native EC public key context pointer or -1 on error
      */
     long getNativePtr() {
+        System.out.println("key: entering " + System.identityHashCode(this));
         if (nativeECKey == 0x0) {
             synchronized (this) {
+                System.out.println("key: synched " + System.identityHashCode(this));
                 if (nativeECKey == 0x0) {
+                    System.out.println("key: creating " + System.identityHashCode(this));
                     ECPoint generator = this.params.getGenerator();
                     EllipticCurve curve = this.params.getCurve();
                     ECField field = curve.getField();
@@ -188,6 +191,7 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
                 }
             }
         }
+        System.out.println("key: exiting " + System.identityHashCode(this) + " native " + nativeECKey);
         return nativeECKey;
     }
 }
