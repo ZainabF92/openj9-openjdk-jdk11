@@ -2736,6 +2736,8 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
 
     if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
         printf("native error: public key is NULL (before)\n");
+    } else {
+        printf("native success: public key is good (before)\n");
     }
 
     /* Derive the shared secret */
@@ -2743,13 +2745,18 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
 
     (*env)->ReleasePrimitiveArrayCritical(env, secret, nativeSecret, 0);
 
+    if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
+        printf("native error: public key is NULL (after)\n");
+    } else {
+        printf("native success: public key is good (after)\n"); 
+    }
+
     if (0 == ret) {
         printErrors();
         printf("native error: OSSL_ECDH_compute_key failed\n");
-        if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
-            printf("native error: public key is NULL (after)\n");
-        }
         return -1;
+    } else {
+        printf("native success: secret derived\n");
     }
 
     return secretLen;
