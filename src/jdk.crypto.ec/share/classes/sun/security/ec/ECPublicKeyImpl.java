@@ -154,10 +154,11 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
      */
     long getNativePtr() {
         System.out.println("key: entering " + System.identityHashCode(this));
-        if (nativeECKey == 0x0) {
+        if (this.nativeECKey == 0x0) {
             synchronized (this) {
                 System.out.println("key: synched " + System.identityHashCode(this));
-                if (nativeECKey == 0x0) {
+                if (this.nativeECKey == 0x0) {
+                    long nativePointer;
                     System.out.println("key: creating " + System.identityHashCode(this));
                     ECPoint generator = this.params.getGenerator();
                     EllipticCurve curve = this.params.getCurve();
@@ -172,26 +173,27 @@ public final class ECPublicKeyImpl extends X509Key implements ECPublicKey {
                     int fieldType = 0;
                     if (field instanceof ECFieldFp) {
                         p = ((ECFieldFp)field).getP().toByteArray();
-                        nativeECKey = nativeCrypto.ECEncodeGFp(a, a.length, b, b.length, p, p.length, gx, gx.length, gy, gy.length, n, n.length, h, h.length);
+                        nativePointer = nativeCrypto.ECEncodeGFp(a, a.length, b, b.length, p, p.length, gx, gx.length, gy, gy.length, n, n.length, h, h.length);
                     } else if (field instanceof ECFieldF2m) {
                         fieldType = 1;
                         p = ((ECFieldF2m)field).getReductionPolynomial().toByteArray();
-                        nativeECKey = nativeCrypto.ECEncodeGF2m(a, a.length, b, b.length, p, p.length, gx, gx.length, gy, gy.length, n, n.length, h, h.length);
+                        nativePointer = nativeCrypto.ECEncodeGF2m(a, a.length, b, b.length, p, p.length, gx, gx.length, gy, gy.length, n, n.length, h, h.length);
                     } else {
-                        nativeECKey = -1;
+                        nativePointer = -1;
                     }
-                    if (nativeECKey != -1) {
-                        nativeCrypto.createECKeyCleaner(this, nativeECKey);
+                    if (nativePointer != -1) {
+                        nativeCrypto.createECKeyCleaner(this, nativePointer);
                         byte[] x = this.w.getAffineX().toByteArray();
                         byte[] y = this.w.getAffineY().toByteArray();
-                        if (nativeCrypto.ECCreatePublicKey(nativeECKey, x, x.length, y, y.length, fieldType) == -1) {
-                            nativeECKey = -1;
+                        if (nativeCrypto.ECCreatePublicKey(nativePointer, x, x.length, y, y.length, fieldType) == -1) {
+                            nativePointer = -1;
                         }
                     }
+                    this.nativeECKey = nativePointer;
                 }
             }
         }
-        System.out.println("key: exiting " + System.identityHashCode(this) + " native " + nativeECKey);
-        return nativeECKey;
+        System.out.println("key: exiting " + System.identityHashCode(this) + " native " + this.nativeECKey);
+        return this.nativeECKey;
     }
 }
