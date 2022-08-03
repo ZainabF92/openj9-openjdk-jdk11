@@ -219,7 +219,7 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
         if ((this.privateKey == null) || (this.publicKey == null)) {
             throw new IllegalStateException("Not initialized correctly");
         }
-        System.out.println("engineGenerateSecret: before getting the native pointers");
+        System.out.println("engineGenerateSecret: before getting the native pointers" + System.identityHashCode(this.publicKey));
         long nativePublicKey = this.publicKey.getNativePtr();
         long nativePrivateKey = this.privateKey.getNativePtr();
         System.out.println("engineGenerateSecret: after getting the native pointers " + nativePublicKey);
