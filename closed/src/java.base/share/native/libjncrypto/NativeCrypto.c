@@ -2303,9 +2303,9 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECCreatePublicKey
     }
 
     if ((*OSSL_EC_KEY_get0_public_key)(publicKey) == NULL) {
-        printf("native error: public key is NULL after creation %d\n", key);
+        printf("native error: public key is NULL after creation %ld\n", key);
     } else {
-        printf("native: public key is good after creation %d\n", key);
+        printf("native: public key is good after creation %ld\n", key);
     }
 
     return 0;
@@ -2735,9 +2735,9 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
     }
 
     if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
-        printf("native error: public key is NULL (before) %d\n", publicKey);
+        printf("native error: public key is NULL (before) %ld\n", publicKey);
     } else {
-        printf("native success: public key is good (before) %d\n", publicKey);
+        printf("native success: public key is good (before) %ld\n", publicKey);
     }
 
     /* Derive the shared secret */
@@ -2746,17 +2746,17 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECDeriveKey
     (*env)->ReleasePrimitiveArrayCritical(env, secret, nativeSecret, 0);
 
     if ((*OSSL_EC_KEY_get0_public_key)(nativePublicKey) == NULL) {
-        printf("native error: public key is NULL (after) %d\n", publicKey);
+        printf("native error: public key is NULL (after) %ld\n", publicKey);
     } else {
-        printf("native success: public key is good (after) %d\n", publicKey); 
+        printf("native success: public key is good (after) %ld\n", publicKey); 
     }
 
     if (0 == ret) {
         printErrors();
-        printf("native error: OSSL_ECDH_compute_key failed %d\n", publicKey);
+        printf("native error: OSSL_ECDH_compute_key failed %ld\n", publicKey);
         return -1;
     } else {
-        printf("native success: secret derived %d\n", publicKey);
+        printf("native success: secret derived %ld\n", publicKey);
     }
 
     return secretLen;
