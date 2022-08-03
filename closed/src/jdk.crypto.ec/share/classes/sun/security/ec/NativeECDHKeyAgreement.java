@@ -219,10 +219,10 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
         if ((this.privateKey == null) || (this.publicKey == null)) {
             throw new IllegalStateException("Not initialized correctly");
         }
-        System.out.println("engineGenerateSecret: before getting the native pointers" + System.identityHashCode(this.publicKey));
+        System.out.println("engineGenerateSecret " + System.identityHashCode(this) + ": java id " + System.identityHashCode(this.publicKey));
         long nativePublicKey = this.publicKey.getNativePtr();
         long nativePrivateKey = this.privateKey.getNativePtr();
-        System.out.println("engineGenerateSecret: after getting the native pointers " + nativePublicKey);
+        System.out.println("engineGenerateSecret " + System.identityHashCode(this) + ": java id " + System.identityHashCode(this.publicKey) + ", native pointer " + nativePublicKey);
         if ((nativePublicKey == -1) || (nativePrivateKey == -1)) {
             if (curveSupported.putIfAbsent(this.curve, Boolean.FALSE) != null) {
                 throw new ProviderException("Could not convert keys to native format");
@@ -244,12 +244,15 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
         }
         int ret;
         synchronized (this.privateKey) {
-            System.out.println("engineGenerateSecret: deriving the key " + nativePublicKey);
+            System.out.println("engineGenerateSecret " + System.identityHashCode(this) + ": deriving the key " + nativePublicKey);
             ret = nativeCrypto.ECDeriveKey(nativePublicKey, nativePrivateKey, sharedSecret, offset, this.secretLen);
         }
         if (ret == -1) {
             System.out.println("curve: " + this.curve);
+            System.out.println("engineGenerateSecret " + System.identityHashCode(this) + ": failed " + nativePublicKey);
             throw new ProviderException("Could not derive key");
+        } else {
+            System.out.println("engineGenerateSecret " + System.identityHashCode(this) + ": success " + nativePublicKey);
         }
         this.publicKey = null;
         return this.secretLen;
