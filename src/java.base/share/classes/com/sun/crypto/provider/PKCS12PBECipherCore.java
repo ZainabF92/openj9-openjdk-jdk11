@@ -22,6 +22,11 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+/*
+ * ===========================================================================
+ * (c) Copyright IBM Corp. 2022, 2022 All Rights Reserved
+ * ===========================================================================
+ */
 
 package com.sun.crypto.provider;
 
@@ -31,6 +36,8 @@ import java.security.spec.*;
 import java.util.Arrays;
 import javax.crypto.*;
 import javax.crypto.spec.*;
+import jdk.crypto.jniprovider.NativeCrypto;
+import sun.security.action.GetPropertyAction;
 
 /**
  * This class implements password-base encryption algorithm with
@@ -58,10 +65,63 @@ final class PKCS12PBECipherCore {
 
     private static final int DEFAULT_SALT_LENGTH = 20;
     private static final int DEFAULT_COUNT = 1024;
+    private static final NativeCrypto nativeCrypto = NativeCrypto.getNativeCrypto();
 
     static final int CIPHER_KEY = 1;
     static final int CIPHER_IV = 2;
     static final int MAC_KEY = 3;
+
+    /*
+     * Check whether native crypto is disabled with property.
+     *
+     * By default, the native crypto is enabled and uses the native
+     * crypto library implementation.
+     *
+     * The property 'jdk.nativePBE' is used to disable Native PBE alone and
+     * 'jdk.nativeCrypto' is used to disable all native cryptos (Digest,
+     * CBC, GCM, RSA, ChaCha20, EC, and PBE).
+     */
+    private static boolean useNativeCrypto;
+    private static boolean useNativePBE;
+
+    static {
+        String nativeCryptTrace = GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace");
+        String nativeCryptStr   = GetPropertyAction.privilegedGetProperty("jdk.nativeCrypto");
+        String nativePBEStr      = GetPropertyAction.privilegedGetProperty("jdk.nativePBE");
+
+        useNativeCrypto = (nativeCryptStr == null) || Boolean.parseBoolean(nativeCryptStr);
+
+        if (!useNativeCrypto) {
+            useNativePBE = false;
+        } else {
+            useNativePBE = (nativePBEStr == null) || Boolean.parseBoolean(nativePBEStr);
+        }
+
+        if (useNativePBE) {
+            /*
+             * User wants to use the native crypto implementation.
+             * Make sure the native crypto library is loaded successfully.
+             * Otherwise, throw a warning message and fall back to the in-built
+             * java crypto implementation.
+             */
+            if (!NativeCrypto.isLoaded()) {
+                useNativePBE = false;
+
+                if (nativeCryptTrace != null) {
+                    System.err.println("Warning: Native crypto library load failed." +
+                            " Using Java crypto implementation");
+                }
+            } else {
+                if (nativeCryptTrace != null) {
+                    System.err.println("PKCS12PBECipherCore Load - using native crypto library.");
+                }
+            }
+        } else {
+            if (nativeCryptTrace != null) {
+                System.err.println("PKCS12PBECipherCore Load - native crypto library disabled.");
+            }
+        }
+    }
 
     // Uses default hash algorithm (SHA-1)
     static byte[] derive(char[] chars, byte[] salt,
@@ -72,6 +132,12 @@ final class PKCS12PBECipherCore {
     // Uses supplied hash algorithm
     static byte[] derive(char[] chars, byte[] salt, int ic, int n, int type,
         String hashAlgo, int blockLength) {
+
+        byte[] key = new byte[n];
+        if (useNativePBE && (nativeCrypto.PBEDerive(chars, chars.length, salt,
+            salt.length, key, ic, n, type, hashAlgo, blockLength) != -1)) {
+            return key;
+        }
 
         // Add in trailing NULL terminator.  Special case:
         // no terminator if password is "\0".
@@ -88,7 +154,6 @@ final class PKCS12PBECipherCore {
             passwd[j] = (byte) ((chars[i] >>> 8) & 0xFF);
             passwd[j+1] = (byte) (chars[i] & 0xFF);
         }
-        byte[] key = new byte[n];
 
         try {
             MessageDigest sha = MessageDigest.getInstance(hashAlgo);

@@ -134,6 +134,11 @@ typedef int OSSL_EC_KEY_set_public_key_t(EC_KEY *, const EC_POINT *);
 typedef int OSSL_EC_KEY_check_key_t(const EC_KEY *);
 typedef int EC_set_public_key_t(EC_KEY *, BIGNUM *, BIGNUM *, int);
 
+typedef const BIGNUM* OSSL_BN_value_one_t(void);
+typedef int OSSL_BN_add_t(BIGNUM *, const BIGNUM *, const BIGNUM *);
+typedef int OSSL_BN_num_bytes_t(const BIGNUM *);
+typedef int OSSL_BN_bn2bin_t(const BIGNUM *, unsigned char *);
+
 typedef int OSSL_CRYPTO_num_locks_t();
 typedef void OSSL_CRYPTO_THREADID_set_numeric_t(CRYPTO_THREADID *id, unsigned long val);
 typedef void* OSSL_OPENSSL_malloc_t(size_t num);
@@ -234,6 +239,12 @@ OSSL_BN_CTX_free_t* OSSL_BN_CTX_free;
 OSSL_EC_KEY_set_public_key_t* OSSL_EC_KEY_set_public_key;
 OSSL_EC_KEY_check_key_t* OSSL_EC_KEY_check_key;
 EC_set_public_key_t* EC_set_public_key;
+
+/* Define pointers for OpenSSL functions to handle PBE algorithm. */
+OSSL_BN_value_one_t* OSSL_BN_value_one;
+OSSL_BN_add_t* OSSL_BN_add;
+OSSL_BN_num_bytes_t* OSSL_BN_num_bytes;
+OSSL_BN_bn2bin_t* OSSL_BN_bn2bin;
 
 /* Structure for OpenSSL Digest context. */
 typedef struct OpenSSLMDContext {
@@ -461,6 +472,12 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
         OSSL_ECGF2M = JNI_TRUE;
     }
 
+    /* Load the functions symbols for OpenSSL PBE algorithm. */
+    OSSL_BN_value_one = (OSSL_BN_value_one_t *)find_crypto_symbol(crypto_library, "BN_value_one");
+    OSSL_BN_add = (OSSL_BN_add_t *)find_crypto_symbol(crypto_library, "BN_add");
+    OSSL_BN_num_bytes = (OSSL_BN_num_bytes_t *)find_crypto_symbol(crypto_library, "BN_num_bytes");
+    OSSL_BN_bn2bin = (OSSL_BN_bn2bin_t *)find_crypto_symbol(crypto_library, "BN_bn2bin");
+
     if ((NULL == OSSL_error_string) ||
         (NULL == OSSL_error_string_n) ||
         (NULL == OSSL_get_error) ||
@@ -519,6 +536,10 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
         (NULL == OSSL_BN_CTX_free) ||
         (NULL == OSSL_EC_KEY_set_public_key) ||
         (NULL == OSSL_EC_KEY_check_key) ||
+        (NULL == OSSL_BN_value_one) ||
+        (NULL == OSSL_BN_add) ||
+        (NULL == OSSL_BN_num_bytes) ||
+        (NULL == OSSL_BN_bn2bin) ||
         /* Check symbols that are only available in OpenSSL 1.1.x and above */
         ((1 == ossl_ver) && ((NULL == OSSL_chacha20) || (NULL == OSSL_chacha20_poly1305))) ||
         /* Check symbols that are only available in OpenSSL 1.0.x and above */
@@ -2790,4 +2811,364 @@ setECPublicKey(EC_KEY *key, BIGNUM *x, BIGNUM *y, int field)
     }
 
     return ret;
+}
+
+/* Header for PBE algorithm */
+int min(int a, int b);
+int roundup(int x, int y);
+void concat(unsigned char *src, int srcLength, unsigned char *dst, int start, int length);
+
+/* Password-based encryption algorithm
+ *
+ * Class:     jdk_crypto_jniprovider_NativeCrypto
+ * Method:    PBEDerive
+ * Signature: (J[CI[BI[BIIILjava/lang/String;I)I
+ */
+JNIEXPORT jint JNICALL
+Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
+  (JNIEnv *env, jclass obj, jcharArray chars, jint charsLength, jbyteArray salt, jint saltLength, jbyteArray key, jint ic, jint n, jint type, jstring hashAlgo, jint v)
+{
+    /* v is the blockLength */
+    EVP_MD_CTX *context = NULL;
+    const EVP_MD *digestAlg = NULL;
+    unsigned char *nativeChars = NULL;
+    unsigned char *nativeSalt = NULL;
+    unsigned char *nativeKey = NULL;
+    unsigned char *passwd = NULL;
+    unsigned char *D = NULL;
+    unsigned char *I = NULL;
+    unsigned char *Ai = NULL;
+    unsigned char *B = NULL;
+    unsigned char *tmp = NULL;
+    BIGNUM *B1 = NULL;
+    BIGNUM *Ij = NULL;
+    int passwdLength = charsLength * 2;
+    int u = 0;
+    int c = 0;
+    int s = 0;
+    int p = 0;
+    int trunc = 0;
+    int tmpLength = 0;
+
+    nativeChars = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, chars, 0));
+    if (NULL == nativeChars) {
+        return -1;
+    }
+
+    if ((passwdLength == 2) && (nativeChars[0] == 0)) {
+        charsLength = 0;
+        passwdLength = 0;
+    } else {
+        passwdLength += 2;
+    }
+
+    passwd = malloc(passwdLength * (sizeof(unsigned char)));
+    if (NULL == passwd) {
+        (*env)->ReleasePrimitiveArrayCritical(env, chars, nativeChars, JNI_ABORT);
+        return -1;
+    }
+    for (size_t i = 0, j = 0; i < charsLength; i++, j+=2) {
+        passwd[j] = (nativeChars[i] >> 8) & 0xFF;
+        passwd[j+1] = nativeChars[i] & 0xFF;
+    }
+    (*env)->ReleasePrimitiveArrayCritical(env, chars, nativeChars, JNI_ABORT);
+
+    /* create the digest context */
+    /* u is the digestLength */
+    /* TODO: hardcoded SHA-1 for now */
+    digestAlg = (*OSSL_sha1)();
+    u = 20;
+    context = (*OSSL_MD_CTX_new)();
+    if (NULL == context) {
+        printErrors();
+        free(passwd);
+        return -1;
+    }
+    if (1 != (*OSSL_DigestInit_ex)(context, digestAlg, NULL)) {
+        printErrors();
+        free(passwd);
+        (*OSSL_MD_CTX_free)(context);
+        return -1;
+    }
+
+    c = roundup(n, u) / u;
+    D = malloc(v * (sizeof(unsigned char)));
+    if (NULL == D) {
+        free(passwd);
+        (*OSSL_MD_CTX_free)(context);
+        return -1;
+    }
+    s = roundup(saltLength, v);
+    p = roundup(passwdLength, v);
+    I = malloc((s + p) * (sizeof(unsigned char)));
+    if (NULL == I) {
+        free(D);
+        free(passwd);
+        (*OSSL_MD_CTX_free)(context);
+        return -1;
+    }
+    nativeSalt = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, salt, 0));
+    if (NULL == nativeSalt) {
+        free(D);
+        free(I);
+        free(passwd);
+        (*OSSL_MD_CTX_free)(context);
+        return -1;
+    }
+
+    memset(D, type, v);
+    concat(nativeSalt, saltLength, I, 0, s);
+    (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
+    concat(passwd, passwdLength, I, s, p);
+    free(passwd);
+
+    nativeKey = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, key, 0));
+    if (NULL == nativeKey) {
+        free(I);
+        free(D);
+        (*OSSL_MD_CTX_free)(context);
+        return -1;
+    }
+    B = malloc(v * (sizeof(unsigned char)));
+    if (NULL == B) {
+        free(D);
+        free(I);
+        (*OSSL_MD_CTX_free)(context);
+        (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+        return -1;
+    }
+    Ai = malloc(u * (sizeof(unsigned char)));
+    if (NULL == Ai) {
+        free(D);
+        free(I);
+        free(B);
+        (*OSSL_MD_CTX_free)(context);
+        (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+        return -1;
+    }
+
+    for (size_t i = 0; ; i++, n -= u) {
+        /* update digest with D and I */
+        if (1 != (*OSSL_DigestUpdate)(context, D, v)) {
+            printErrors();
+            free(D);
+            free(I);
+            free(B);
+            free(Ai);
+            (*OSSL_BN_free)(B1);
+            (*OSSL_BN_free)(Ij);
+            (*OSSL_MD_CTX_free)(context);
+            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+            return -1;
+        }
+        if (1 != (*OSSL_DigestUpdate)(context, I, (s + p))) {
+            printErrors();
+            free(D);
+            free(I);
+            free(B);
+            free(Ai);
+            (*OSSL_BN_free)(B1);
+            (*OSSL_BN_free)(Ij);
+            (*OSSL_MD_CTX_free)(context);
+            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+            return -1;
+        }
+
+        /* digest compute and reset */
+        if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
+            printErrors();
+            free(D);
+            free(I);
+            free(B);
+            free(Ai);
+            (*OSSL_BN_free)(B1);
+            (*OSSL_BN_free)(Ij);
+            (*OSSL_MD_CTX_free)(context);
+            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+            return -1;
+        }
+        (*OSSL_MD_CTX_reset)(context);
+        if (1 != (*OSSL_DigestInit_ex)(context, digestAlg, NULL)) {
+            printErrors();
+            free(D);
+            free(I);
+            free(B);
+            free(Ai);
+            (*OSSL_BN_free)(B1);
+            (*OSSL_BN_free)(Ij);
+            (*OSSL_MD_CTX_free)(context);
+            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+            return -1;
+        }
+
+        for (size_t r = 0; r < ic; r++) {
+            /* digest update */
+            if (1 != (*OSSL_DigestUpdate)(context, Ai, u)) {
+                printErrors();
+                free(D);
+                free(I);
+                free(B);
+                free(Ai);
+                (*OSSL_BN_free)(B1);
+                (*OSSL_BN_free)(Ij);
+                (*OSSL_MD_CTX_free)(context);
+                (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+                return -1;
+            }
+            /* digest compute and reset */
+            if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
+                printErrors();
+                free(D);
+                free(I);
+                free(B);
+                free(Ai);
+                (*OSSL_BN_free)(B1);
+                (*OSSL_BN_free)(Ij);
+                (*OSSL_MD_CTX_free)(context);
+                (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+                return -1;
+            }
+            (*OSSL_MD_CTX_reset)(context);
+            if (1 != (*OSSL_DigestInit_ex)(context, digestAlg, NULL)) {
+                printErrors();
+                free(D);
+                free(I);
+                free(B);
+                free(Ai);
+                (*OSSL_BN_free)(B1);
+                (*OSSL_BN_free)(Ij);
+                (*OSSL_MD_CTX_free)(context);
+                (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+                return -1;
+            }
+        }
+        
+        memcpy(&nativeKey[u * i], Ai, min(n, u));
+        if ((i + 1) == c) {
+            break;
+        }
+        concat(Ai, u, B, 0, v);
+        B1 = (*OSSL_BN_bin2bn)(B, v, B1);
+        if (NULL == B1) {
+            printErrors();
+            free(D);
+            free(I);
+            free(B);
+            free(Ai);
+            (*OSSL_BN_free)(B1);
+            (*OSSL_BN_free)(Ij);
+            (*OSSL_MD_CTX_free)(context);
+            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+            return -1;
+        }
+        if (1 != (*OSSL_BN_add)(B1, B1, (*OSSL_BN_value_one)())) {
+            printErrors();
+            free(D);
+            free(I);
+            free(B);
+            free(Ai);
+            (*OSSL_BN_free)(B1);
+            (*OSSL_BN_free)(Ij);
+            (*OSSL_MD_CTX_free)(context);
+            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+            return -1;
+        }
+
+        for (size_t j = 0; j < (s + p); j+=v) {
+            Ij = (*OSSL_BN_bin2bn)(&I[j], v, Ij);
+            if (NULL == Ij) {
+                printErrors();
+                free(D);
+                free(I);
+                free(B);
+                free(Ai);
+                (*OSSL_BN_free)(B1);
+                (*OSSL_BN_free)(Ij);
+                (*OSSL_MD_CTX_free)(context);
+                (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+                return -1;
+            }
+            if (1 != (*OSSL_BN_add)(Ij, Ij, B1)) {
+                printErrors();
+                free(D);
+                free(I);
+                free(B);
+                free(Ai);
+                (*OSSL_BN_free)(B1);
+                (*OSSL_BN_free)(Ij);
+                (*OSSL_MD_CTX_free)(context);
+                (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+                return -1;
+            }
+            tmp = malloc((*OSSL_BN_num_bytes)(Ij));
+            if (NULL == tmp) {
+                free(D);
+                free(I);
+                free(B);
+                free(Ai);
+                (*OSSL_BN_free)(B1);
+                (*OSSL_BN_free)(Ij);
+                (*OSSL_MD_CTX_free)(context);
+                (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+                return -1;
+            }
+            tmpLength = (*OSSL_BN_bn2bin)(Ij, tmp);
+            trunc = tmpLength - v;
+            if (trunc >= 0) {
+                memcpy(&I[j], &tmp[trunc], v);
+            } else if (trunc < 0) {
+                memset(&I[j], 0, -trunc);
+                memcpy(&I[j + (-trunc)], tmp, tmpLength);
+            }
+            free(tmp);
+        }
+    }
+
+    free(D);
+    free(I);
+    free(B);
+    free(Ai);
+    (*OSSL_BN_free)(B1);
+    (*OSSL_BN_free)(Ij);
+    (*OSSL_MD_CTX_free)(context);
+    (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+
+    return 0;
+}
+
+/** Return the minimum of the two given integers
+ */
+int
+min(int a, int b)
+{
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+/** roundup 
+ */
+int
+roundup(int x, int y)
+{
+    return ((x + (y - 1)) / y) * y;
+}
+
+
+/** concat
+ */
+void
+concat(unsigned char *src, int srcLength, unsigned char *dst, int start, int length)
+{
+    int loop, i, off;
+    if (srcLength == 0) {
+        return;
+    }
+    loop = length / srcLength;
+    for (i = 0, off = 0; i < loop; i++, off += srcLength) {
+        memcpy(&dst[off + start], src, srcLength);
+    }
+    memcpy(&dst[off + start], src, (length - off));
 }

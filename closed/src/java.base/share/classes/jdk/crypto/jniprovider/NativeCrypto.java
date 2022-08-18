@@ -293,4 +293,15 @@ public class NativeCrypto {
 
     public final native boolean ECNativeGF2m();
 
+    public final native int PBEDerive(char[] chars,
+                                      int charsLength,
+                                      byte[] salt,
+                                      int saltLength,
+                                      byte[] key,
+                                      int ic,
+                                      int n,
+                                      int type,
+                                      String hashAlgo,
+                                      int v);
+
 }
