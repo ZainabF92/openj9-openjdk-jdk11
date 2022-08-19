@@ -87,7 +87,7 @@ final class PKCS12PBECipherCore {
     static {
         String nativeCryptTrace = GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace");
         String nativeCryptStr   = GetPropertyAction.privilegedGetProperty("jdk.nativeCrypto");
-        String nativePBEStr      = GetPropertyAction.privilegedGetProperty("jdk.nativePBE");
+        String nativePBEStr     = GetPropertyAction.privilegedGetProperty("jdk.nativePBE");
 
         useNativeCrypto = (nativeCryptStr == null) || Boolean.parseBoolean(nativeCryptStr);
 
@@ -129,15 +129,32 @@ final class PKCS12PBECipherCore {
         return derive(chars, salt, ic, n, type, "SHA-1", 64);
     }
 
+    private static void printByteArray(byte[] array, String name) {
+        System.out.print(name + ": ");
+        for (int index = 0; index < array.length; index++) {
+            System.out.print(array[index] + ", ");
+        }
+        System.out.println();
+    }
+
     // Uses supplied hash algorithm
     static byte[] derive(char[] chars, byte[] salt, int ic, int n, int type,
         String hashAlgo, int blockLength) {
 
+        System.out.println("Hash algorithm: " + hashAlgo);
+
         byte[] key = new byte[n];
         if (useNativePBE && (nativeCrypto.PBEDerive(chars, chars.length, salt,
             salt.length, key, ic, n, type, hashAlgo, blockLength) != -1)) {
-            return key;
+            printByteArray(key, "Native final key");
+            // return key;
         }
+
+        System.out.print("Java chars: ");
+        for (int index = 0; index < chars.length; index++) {
+            System.out.print(chars[index] + ", ");
+        }
+        System.out.println();
 
         // Add in trailing NULL terminator.  Special case:
         // no terminator if password is "\0".
@@ -155,6 +172,8 @@ final class PKCS12PBECipherCore {
             passwd[j+1] = (byte) (chars[i] & 0xFF);
         }
 
+        printByteArray(passwd, "Java password");
+
         try {
             MessageDigest sha = MessageDigest.getInstance(hashAlgo);
 
@@ -171,6 +190,8 @@ final class PKCS12PBECipherCore {
             concat(passwd, I, s, p);
             Arrays.fill(passwd, (byte) 0x00);
 
+            printByteArray(I, "Java I initial");
+
             byte[] Ai;
             byte[] B = new byte[v];
             byte[] tmp = new byte[v];
@@ -180,9 +201,13 @@ final class PKCS12PBECipherCore {
                 sha.update(D);
                 sha.update(I);
                 Ai = sha.digest();
-                for (int r = 1; r < ic; r++)
+                printByteArray(Ai, "Java Ai initial");
+                for (int r = 1; r < ic; r++) {
                     Ai = sha.digest(Ai);
+                    printByteArray(Ai, "Java Ai");
+                }
                 System.arraycopy(Ai, 0, key, u * i, Math.min(n, u));
+                printByteArray(key, "Java intermediate key");
                 if (i + 1 == c)
                     break;
                 concat(Ai, B, 0, B.length);
@@ -206,11 +231,13 @@ final class PKCS12PBECipherCore {
                         Arrays.fill(I, j, j + (-trunc), (byte)0);
                         System.arraycopy(tmp, 0, I, j + (-trunc), tmp.length);
                     }
+                    printByteArray(tmp, "Java temp");
                 }
             }
         } catch (Exception e) {
             throw new RuntimeException("internal error: " + e);
         }
+        printByteArray(key, "Java final key");
         return key;
     }
 

@@ -136,8 +136,8 @@ typedef int EC_set_public_key_t(EC_KEY *, BIGNUM *, BIGNUM *, int);
 
 typedef const BIGNUM* OSSL_BN_value_one_t(void);
 typedef int OSSL_BN_add_t(BIGNUM *, const BIGNUM *, const BIGNUM *);
-typedef int OSSL_BN_num_bytes_t(const BIGNUM *);
 typedef int OSSL_BN_bn2bin_t(const BIGNUM *, unsigned char *);
+typedef int OSSL_BN_num_bits_t(const BIGNUM *);
 
 typedef int OSSL_CRYPTO_num_locks_t();
 typedef void OSSL_CRYPTO_THREADID_set_numeric_t(CRYPTO_THREADID *id, unsigned long val);
@@ -243,8 +243,8 @@ EC_set_public_key_t* EC_set_public_key;
 /* Define pointers for OpenSSL functions to handle PBE algorithm. */
 OSSL_BN_value_one_t* OSSL_BN_value_one;
 OSSL_BN_add_t* OSSL_BN_add;
-OSSL_BN_num_bytes_t* OSSL_BN_num_bytes;
 OSSL_BN_bn2bin_t* OSSL_BN_bn2bin;
+OSSL_BN_num_bits_t* OSSL_BN_num_bits;
 
 /* Structure for OpenSSL Digest context. */
 typedef struct OpenSSLMDContext {
@@ -475,8 +475,8 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
     /* Load the functions symbols for OpenSSL PBE algorithm. */
     OSSL_BN_value_one = (OSSL_BN_value_one_t *)find_crypto_symbol(crypto_library, "BN_value_one");
     OSSL_BN_add = (OSSL_BN_add_t *)find_crypto_symbol(crypto_library, "BN_add");
-    OSSL_BN_num_bytes = (OSSL_BN_num_bytes_t *)find_crypto_symbol(crypto_library, "BN_num_bytes");
     OSSL_BN_bn2bin = (OSSL_BN_bn2bin_t *)find_crypto_symbol(crypto_library, "BN_bn2bin");
+    OSSL_BN_num_bits = (OSSL_BN_num_bits_t *)find_crypto_symbol(crypto_library, "BN_num_bits");
 
     if ((NULL == OSSL_error_string) ||
         (NULL == OSSL_error_string_n) ||
@@ -538,8 +538,8 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
         (NULL == OSSL_EC_KEY_check_key) ||
         (NULL == OSSL_BN_value_one) ||
         (NULL == OSSL_BN_add) ||
-        (NULL == OSSL_BN_num_bytes) ||
         (NULL == OSSL_BN_bn2bin) ||
+        (NULL == OSSL_BN_num_bits) ||
         /* Check symbols that are only available in OpenSSL 1.1.x and above */
         ((1 == ossl_ver) && ((NULL == OSSL_chacha20) || (NULL == OSSL_chacha20_poly1305))) ||
         /* Check symbols that are only available in OpenSSL 1.0.x and above */
@@ -2817,6 +2817,7 @@ setECPublicKey(EC_KEY *key, BIGNUM *x, BIGNUM *y, int field)
 int min(int a, int b);
 int roundup(int x, int y);
 void concat(unsigned char *src, int srcLength, unsigned char *dst, int start, int length);
+void printByteArray(unsigned char *arr, int n);
 
 /* Password-based encryption algorithm
  *
@@ -2849,11 +2850,15 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     int p = 0;
     int trunc = 0;
     int tmpLength = 0;
+    int keyLength = n;
 
     nativeChars = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, chars, 0));
     if (NULL == nativeChars) {
         return -1;
     }
+
+    printf("Native chars: ");
+    printByteArray(nativeChars, charsLength);
 
     if ((passwdLength == 2) && (nativeChars[0] == 0)) {
         charsLength = 0;
@@ -2867,11 +2872,14 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
         (*env)->ReleasePrimitiveArrayCritical(env, chars, nativeChars, JNI_ABORT);
         return -1;
     }
-    for (size_t i = 0, j = 0; i < charsLength; i++, j+=2) {
+    for (int i = 0, j = 0; i < charsLength; i++, j+=2) {
         passwd[j] = (nativeChars[i] >> 8) & 0xFF;
         passwd[j+1] = nativeChars[i] & 0xFF;
     }
     (*env)->ReleasePrimitiveArrayCritical(env, chars, nativeChars, JNI_ABORT);
+
+    printf("Native password: ");
+    printByteArray(passwd, passwdLength);
 
     /* create the digest context */
     /* u is the digestLength */
@@ -2947,7 +2955,10 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
         return -1;
     }
 
-    for (size_t i = 0; ; i++, n -= u) {
+    printf("Native I initial: ");
+    printByteArray(I, s+p);
+
+    for (int i = 0; ; i++, n -= u) {
         /* update digest with D and I */
         if (1 != (*OSSL_DigestUpdate)(context, D, v)) {
             printErrors();
@@ -3001,7 +3012,10 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             return -1;
         }
 
-        for (size_t r = 0; r < ic; r++) {
+        printf("Native Ai initial: ");
+        printByteArray(Ai, u);
+
+        for (int r = 0; r < ic; r++) {
             /* digest update */
             if (1 != (*OSSL_DigestUpdate)(context, Ai, u)) {
                 printErrors();
@@ -3041,9 +3055,13 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
                 return -1;
             }
+            printf("Native Ai: ");
+            printByteArray(Ai, u);
         }
         
         memcpy(&nativeKey[u * i], Ai, min(n, u));
+        printf("Native intermediate key: ");
+        printByteArray(nativeKey, keyLength);
         if ((i + 1) == c) {
             break;
         }
@@ -3074,7 +3092,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             return -1;
         }
 
-        for (size_t j = 0; j < (s + p); j+=v) {
+        for (int j = 0; j < (s + p); j+=v) {
             Ij = (*OSSL_BN_bin2bn)(&I[j], v, Ij);
             if (NULL == Ij) {
                 printErrors();
@@ -3100,7 +3118,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
                 return -1;
             }
-            tmp = malloc((*OSSL_BN_num_bytes)(Ij));
+            tmp = malloc(((*OSSL_BN_num_bits)(Ij)+7)/8);
             if (NULL == tmp) {
                 free(D);
                 free(I);
@@ -3120,6 +3138,8 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 memset(&I[j], 0, -trunc);
                 memcpy(&I[j + (-trunc)], tmp, tmpLength);
             }
+            printf("Native temp: ");
+            printByteArray(tmp, tmpLength);
             free(tmp);
         }
     }
@@ -3133,6 +3153,8 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     (*OSSL_MD_CTX_free)(context);
     (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
 
+    printf("Native end key: ");
+    printByteArray(nativeKey, keyLength);
     return 0;
 }
 
@@ -3171,4 +3193,12 @@ concat(unsigned char *src, int srcLength, unsigned char *dst, int start, int len
         memcpy(&dst[off + start], src, srcLength);
     }
     memcpy(&dst[off + start], src, (length - off));
+}
+
+void printByteArray(unsigned char *arr, int n) {
+    for (int i = 0; i < n; i++)
+    {
+        printf("%d, ", arr[i]);
+    }
+    printf("\n");
 }
