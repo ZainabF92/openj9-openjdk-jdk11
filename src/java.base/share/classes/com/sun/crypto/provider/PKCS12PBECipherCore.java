@@ -132,7 +132,7 @@ final class PKCS12PBECipherCore {
     private static void printByteArray(byte[] array, String name) {
         System.out.print(name + ": ");
         for (int index = 0; index < array.length; index++) {
-            System.out.print(array[index] + ", ");
+            System.out.print(Byte.toUnsignedInt(array[index]) + ", ");
         }
         System.out.println();
     }
@@ -142,19 +142,6 @@ final class PKCS12PBECipherCore {
         String hashAlgo, int blockLength) {
 
         System.out.println("Hash algorithm: " + hashAlgo);
-
-        byte[] key = new byte[n];
-        if (useNativePBE && (nativeCrypto.PBEDerive(chars, chars.length, salt,
-            salt.length, key, ic, n, type, hashAlgo, blockLength) != -1)) {
-            printByteArray(key, "Native final key");
-            // return key;
-        }
-
-        System.out.print("Java chars: ");
-        for (int index = 0; index < chars.length; index++) {
-            System.out.print(chars[index] + ", ");
-        }
-        System.out.println();
 
         // Add in trailing NULL terminator.  Special case:
         // no terminator if password is "\0".
@@ -171,8 +158,20 @@ final class PKCS12PBECipherCore {
             passwd[j] = (byte) ((chars[i] >>> 8) & 0xFF);
             passwd[j+1] = (byte) (chars[i] & 0xFF);
         }
+        byte[] key = new byte[n];
 
         printByteArray(passwd, "Java password");
+
+        // TODO: only works for SHA1 right now
+        if (hashAlgo.equals("SHA1") || hashAlgo.equals("SHA-1")) {
+            if (useNativePBE && (nativeCrypto.PBEDerive(passwd, passwd.length, salt,
+                salt.length, key, ic, n, type, hashAlgo, blockLength) != -1)) {
+                printByteArray(key, "Native final key");
+                System.out.println("Using native derive");
+                return key;
+            }
+        }
+        System.out.println("Using java derive");
 
         try {
             MessageDigest sha = MessageDigest.getInstance(hashAlgo);
@@ -204,7 +203,7 @@ final class PKCS12PBECipherCore {
                 printByteArray(Ai, "Java Ai initial");
                 for (int r = 1; r < ic; r++) {
                     Ai = sha.digest(Ai);
-                    printByteArray(Ai, "Java Ai");
+                    // printByteArray(Ai, "Java Ai");
                 }
                 System.arraycopy(Ai, 0, key, u * i, Math.min(n, u));
                 printByteArray(key, "Java intermediate key");
