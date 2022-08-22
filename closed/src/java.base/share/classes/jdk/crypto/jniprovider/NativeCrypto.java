@@ -301,7 +301,8 @@ public class NativeCrypto {
                                       int ic,
                                       int n,
                                       int type,
-                                      String hashAlgo,
+                                      int hashAlgo,
+                                      int u,
                                       int v);
 
 }

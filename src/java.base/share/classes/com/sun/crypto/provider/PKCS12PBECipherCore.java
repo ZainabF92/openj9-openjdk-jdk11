@@ -162,16 +162,31 @@ final class PKCS12PBECipherCore {
 
         printByteArray(passwd, "Java password");
 
-        // TODO: only works for SHA1 right now
-        if (hashAlgo.equals("SHA1") || hashAlgo.equals("SHA-1")) {
-            if (useNativePBE && (nativeCrypto.PBEDerive(passwd, passwd.length, salt,
-                salt.length, key, ic, n, type, hashAlgo, blockLength) != -1)) {
+        if (useNativePBE) {
+            int hashIndex = 0;
+            int digestLength = 0;
+            if (hashAlgo.equals("SHA") || hashAlgo.equals("SHA1") || hashAlgo.equals("SHA-1")) {
+                hashIndex = 1;
+                digestLength = 20;
+            } else if (hashAlgo.equals("SHA224") || hashAlgo.equals("SHA-224")) {
+                hashIndex = 2;
+                digestLength = 28;
+            } else if (hashAlgo.equals("SHA256") || hashAlgo.equals("SHA-256")) {
+                hashIndex = 3;
+                digestLength = 32;
+            } else if (hashAlgo.equals("SHA384") || hashAlgo.equals("SHA-384")) {
+                hashIndex = 4;
+                digestLength = 48;
+            } else if (hashAlgo.equals("SHA512") || hashAlgo.equals("SHA-512")) {
+                hashIndex = 5;
+                digestLength = 64;
+            }
+            if (!(hashIndex == 0) && (nativeCrypto.PBEDerive(passwd, passwd.length, salt,
+                salt.length, key, ic, n, type, hashIndex, digestLength, blockLength) != -1)) {
                 printByteArray(key, "Native final key");
-                System.out.println("Using native derive");
-                return key;
+                // return key;
             }
         }
-        System.out.println("Using java derive");
 
         try {
             MessageDigest sha = MessageDigest.getInstance(hashAlgo);
