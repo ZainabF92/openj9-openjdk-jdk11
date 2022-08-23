@@ -2898,7 +2898,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     memset(D, type, v);
 
     for (int i = 0; ; i++, n -= u) {
-        /*
         if (1 != (*OSSL_DigestUpdate)(context, D, v)) {
             printErrors();
             (*OSSL_BN_free)(B1);
@@ -2932,7 +2931,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-
+        /*
         for (int r = 1; r < ic; r++) {
             if (1 != (*OSSL_DigestUpdate)(context, Ai, u)) {
                 printErrors();
