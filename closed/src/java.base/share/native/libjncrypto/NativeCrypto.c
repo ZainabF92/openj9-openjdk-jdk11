@@ -2898,7 +2898,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     memset(D, type, v);
 
     for (int i = 0; ; i++, n -= u) {
-        /* update digest with D and I */
         if (1 != (*OSSL_DigestUpdate)(context, D, v)) {
             printErrors();
             (*OSSL_BN_free)(B1);
@@ -2915,7 +2914,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-        /* digest compute and reset */
         if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
             printErrors();
             (*OSSL_BN_free)(B1);
@@ -2936,7 +2934,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
         }
 
         for (int r = 1; r < ic; r++) {
-            /* digest update */
             if (1 != (*OSSL_DigestUpdate)(context, Ai, u)) {
                 printErrors();
                 (*OSSL_BN_free)(B1);
@@ -2945,7 +2942,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
                 return -1;
             }
-            /* digest compute and reset */
             if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
                 printErrors();
                 (*OSSL_BN_free)(B1);
@@ -2986,7 +2982,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-
         for (int j = 0; j < (s + p); j+=v) {
             Ij = (*OSSL_BN_bin2bn)(&I[j], v, Ij);
             if (NULL == Ij) {
