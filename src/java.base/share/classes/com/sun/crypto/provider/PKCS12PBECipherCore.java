@@ -22,6 +22,11 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+/*
+ * ===========================================================================
+ * (c) Copyright IBM Corp. 2022, 2022 All Rights Reserved
+ * ===========================================================================
+ */
 
 package com.sun.crypto.provider;
 
@@ -31,6 +36,8 @@ import java.security.spec.*;
 import java.util.Arrays;
 import javax.crypto.*;
 import javax.crypto.spec.*;
+import jdk.crypto.jniprovider.NativeCrypto;
+import sun.security.action.GetPropertyAction;
 
 /**
  * This class implements password-base encryption algorithm with
@@ -58,10 +65,64 @@ final class PKCS12PBECipherCore {
 
     private static final int DEFAULT_SALT_LENGTH = 20;
     private static final int DEFAULT_COUNT = 1024;
+    private static final NativeCrypto nativeCrypto = NativeCrypto.getNativeCrypto();
+    private static final String nativeCryptTrace;
 
     static final int CIPHER_KEY = 1;
     static final int CIPHER_IV = 2;
     static final int MAC_KEY = 3;
+
+    /*
+     * Check whether native crypto is disabled with property.
+     *
+     * By default, the native crypto is enabled and uses the native
+     * crypto library implementation.
+     *
+     * The property 'jdk.nativePBE' is used to disable Native PBE alone and
+     * 'jdk.nativeCrypto' is used to disable all native cryptos (Digest,
+     * CBC, GCM, RSA, ChaCha20, EC, and PBE).
+     */
+    private static boolean useNativeCrypto;
+    private static boolean useNativePBE;
+
+    static {
+        nativeCryptTrace      = GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace");
+        String nativeCryptStr = GetPropertyAction.privilegedGetProperty("jdk.nativeCrypto");
+        String nativePBEStr   = GetPropertyAction.privilegedGetProperty("jdk.nativePBE");
+
+        useNativeCrypto = (nativeCryptStr == null) || Boolean.parseBoolean(nativeCryptStr);
+
+        if (!useNativeCrypto) {
+            useNativePBE = false;
+        } else {
+            useNativePBE = (nativePBEStr == null) || Boolean.parseBoolean(nativePBEStr);
+        }
+
+        if (useNativePBE) {
+            /*
+             * User wants to use the native crypto implementation.
+             * Make sure the native crypto library is loaded successfully.
+             * Otherwise, throw a warning message and fall back to the in-built
+             * java crypto implementation.
+             */
+            if (!NativeCrypto.isLoaded()) {
+                useNativePBE = false;
+
+                if (nativeCryptTrace != null) {
+                    System.err.println("Warning: Native crypto library load failed." +
+                            " Using Java crypto implementation");
+                }
+            } else {
+                if (nativeCryptTrace != null) {
+                    System.err.println("PKCS12PBECipherCore Load - using native crypto library.");
+                }
+            }
+        } else {
+            if (nativeCryptTrace != null) {
+                System.err.println("PKCS12PBECipherCore Load - native crypto library disabled.");
+            }
+        }
+    }
 
     // Uses default hash algorithm (SHA-1)
     static byte[] derive(char[] chars, byte[] salt,
@@ -89,6 +150,37 @@ final class PKCS12PBECipherCore {
             passwd[j+1] = (byte) (chars[i] & 0xFF);
         }
         byte[] key = new byte[n];
+
+        if (useNativePBE) {
+            int hashIndex = 0;
+            int digestLength = 0;
+            if (hashAlgo.equals("SHA") || hashAlgo.equals("SHA1") || hashAlgo.equals("SHA-1")) {
+                hashIndex = 1;
+                digestLength = 20;
+            } else if (hashAlgo.equals("SHA224") || hashAlgo.equals("SHA-224")) {
+                hashIndex = 2;
+                digestLength = 28;
+            } else if (hashAlgo.equals("SHA256") || hashAlgo.equals("SHA-256")) {
+                hashIndex = 3;
+                digestLength = 32;
+            } else if (hashAlgo.equals("SHA384") || hashAlgo.equals("SHA-384")) {
+                hashIndex = 4;
+                digestLength = 48;
+            } else if (hashAlgo.equals("SHA512") || hashAlgo.equals("SHA-512")) {
+                hashIndex = 5;
+                digestLength = 64;
+            }
+            if (hashIndex != 0) {
+                if (nativeCrypto.PBEDerive(passwd, passwd.length, salt, salt.length,
+                    key, ic, n, type, hashIndex, digestLength, blockLength) != -1) {
+                    return key;
+                } else if (nativeCryptTrace != null) {
+                    System.err.println("Native PBE derive failed for algorithm " + hashAlgo + ", using Java implementation.");
+                }
+            } else if (nativeCryptTrace != null) {
+                System.err.println("The algorithm " + hashAlgo + " is not supported in native code, using Java implementation.");
+            }
+        }
 
         try {
             MessageDigest sha = MessageDigest.getInstance(hashAlgo);
