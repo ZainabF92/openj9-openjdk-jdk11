@@ -2898,6 +2898,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     memset(D, type, v);
 
     for (int i = 0; ; i++, n -= u) {
+        /*
         if (1 != (*OSSL_DigestUpdate)(context, D, v)) {
             printErrors();
             (*OSSL_BN_free)(B1);
@@ -2925,7 +2926,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
         (*OSSL_MD_CTX_reset)(context);
         if (1 != (*OSSL_DigestInit_ex)(context, digestAlg, NULL)) {
             printErrors();
-            free(Ai);
             (*OSSL_BN_free)(B1);
             (*OSSL_BN_free)(Ij);
             (*OSSL_MD_CTX_free)(context);
@@ -2960,6 +2960,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 return -1;
             }
         }
+        */
         memcpy(&nativeKey[u * i], Ai, min(n, u));
         if ((i + 1) == c) {
             break;
