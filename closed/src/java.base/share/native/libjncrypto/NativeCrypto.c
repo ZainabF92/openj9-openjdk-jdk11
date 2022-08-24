@@ -2914,7 +2914,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-        /*
         if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
             printErrors();
             (*OSSL_BN_free)(B1);
@@ -2932,7 +2931,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-        */
         for (int r = 1; r < ic; r++) {
             if (1 != (*OSSL_DigestUpdate)(context, Ai, u)) {
                 printErrors();
@@ -2942,7 +2940,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
                 return -1;
             }
-            /*
             if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
                 printErrors();
                 (*OSSL_BN_free)(B1);
@@ -2960,7 +2957,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
                 return -1;
             }
-            */
         }
         memcpy(&nativeKey[u * i], Ai, min(n, u));
         if ((i + 1) == c) {
