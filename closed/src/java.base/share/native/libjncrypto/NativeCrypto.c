@@ -2833,12 +2833,13 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     int c = roundup(n, u) / u;
     int trunc = 0;
     int tmpLength = 0;
-    unsigned char D[v];
+    /* The arrays D and I are stored together*/
+    unsigned char D[v + s + p];
+    unsigned char *I = D + v;
     unsigned char B[v];
-    unsigned char I[s+p];
     unsigned char Ai[u];
-    /* tmp is the result of: a v-byte number + a v-byte number + 1 */
-    unsigned char tmp[v+1];
+    /* tmp is the result of: a v-byte number + a v-byte number + one */
+    unsigned char tmp[v + 1];
     unsigned char *nativePasswd = NULL;
     unsigned char *nativeSalt = NULL;
     unsigned char *nativeKey = NULL;
@@ -2907,7 +2908,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
 
     for (int i = 0; ; i++, n -= u) {
         /* update digest with D and I */
-        if (1 != (*OSSL_DigestUpdate)(context, D, v)) {
+        if (1 != (*OSSL_DigestUpdate)(context, D, (v + s + p))) {
             printErrors();
             (*OSSL_BN_free)(B1);
             (*OSSL_BN_free)(Ij);
@@ -2915,15 +2916,6 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-        if (1 != (*OSSL_DigestUpdate)(context, I, (s + p))) {
-            printErrors();
-            (*OSSL_BN_free)(B1);
-            (*OSSL_BN_free)(Ij);
-            (*OSSL_MD_CTX_free)(context);
-            (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
-            return -1;
-        }
-
         /* digest compute and reset */
         if (1 != (*OSSL_DigestFinal_ex)(context, Ai, NULL)) {
             printErrors();
@@ -2933,8 +2925,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
             (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
             return -1;
         }
-        (*OSSL_MD_CTX_reset)(context);
-        if (1 != (*OSSL_DigestInit_ex)(context, digestAlg, NULL)) {
+        if (1 != (*OSSL_DigestInit_ex)(context, NULL, NULL)) {
             printErrors();
             (*OSSL_BN_free)(B1);
             (*OSSL_BN_free)(Ij);
@@ -2965,8 +2956,7 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
                 (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
                 return -1;
             }
-            (*OSSL_MD_CTX_reset)(context);
-            if (1 != (*OSSL_DigestInit_ex)(context, digestAlg, NULL)) {
+            if (1 != (*OSSL_DigestInit_ex)(context, NULL, NULL)) {
                 printErrors();
                 (*OSSL_BN_free)(B1);
                 (*OSSL_BN_free)(Ij);
