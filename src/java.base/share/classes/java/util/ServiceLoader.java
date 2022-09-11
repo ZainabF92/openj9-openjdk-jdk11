@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * ===========================================================================
+ * (c) Copyright IBM Corp. 2022, 2022 All Rights Reserved
+ * ===========================================================================
+ */
+
 package java.util;
 
 import java.io.BufferedReader;
@@ -56,6 +62,9 @@ import jdk.internal.module.ServicesCatalog;
 import jdk.internal.module.ServicesCatalog.ServiceProvider;
 import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
+
+import openj9.internal.security.RestrictedSecurityConfigurator;
+import openj9.internal.security.RestrictedSecurityProperties;
 
 /**
  * A facility to load implementations of a service.
@@ -717,9 +726,33 @@ public final class ServiceLoader<S>
         @Override
         public S get() {
             if (factoryMethod != null) {
-                return invokeFactoryMethod();
+                // If the specified class extends java.security.Provider
+                // && the restricted security mode is enabled.
+                if (java.security.Provider.class
+                        .isAssignableFrom(factoryMethod.getDeclaringClass())
+                        && RestrictedSecurityConfigurator.isEnabled()) {
+                    // load provider if it is allowed in restricted security mode.
+                    if (RestrictedSecurityProperties.getInstance()
+                            .isProviderAllowed(factoryMethod.getDeclaringClass().getName())) {
+                        return invokeFactoryMethod();
+                    }
+                    // Do nothing (return provider = null) if it is not allowed.
+                    return null;
+                } else {
+                    return invokeFactoryMethod();
+                }
             } else {
-                return newInstance();
+                if (java.security.Provider.class
+                        .isAssignableFrom(ctor.getDeclaringClass())
+                        && RestrictedSecurityConfigurator.isEnabled()) {
+                    if (RestrictedSecurityProperties.getInstance()
+                            .isProviderAllowed(ctor.getDeclaringClass().getName())) {
+                        return newInstance();
+                    }
+                    return null;
+                } else {
+                    return newInstance();
+                }
             }
         }
 
