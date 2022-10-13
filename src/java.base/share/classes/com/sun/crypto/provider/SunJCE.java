@@ -99,24 +99,23 @@ public final class SunJCE extends Provider {
 
     private static boolean nativeChaCha20Init() {
         boolean nativeChaCha20 = true;
-        String nativeCryptTrace = GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace");
-        String nativeCryptStr = GetPropertyAction.privilegedGetProperty("jdk.nativeCrypto");
+        boolean nativeCryptTrace = NativeCrypto.isTraceEnabled();
 
-        if ((nativeCryptStr != null) && !Boolean.parseBoolean(nativeCryptStr)) {
-            /* nativeCrypto is explicitly disabled */
-            nativeChaCha20 = false;
-        } else {
-            String nativeChaCha20Str = GetPropertyAction.privilegedGetProperty("jdk.nativeChaCha20");
+        if (NativeCrypto.isEnabled()) {
+            String nativeChaCha20Str = GetPropertyAction.privilegedGetProperty("jdk.nativeChaCha20", "true");
 
-            if ((nativeChaCha20Str != null) && !Boolean.parseBoolean(nativeChaCha20Str)) {
+            if (!Boolean.parseBoolean(nativeChaCha20Str)) {
                 /* nativeChaCha20 is explicitly disabled */
                 nativeChaCha20 = false;
             }
+        } else {
+             /* nativeCrypto is explicitly disabled */
+             nativeChaCha20 = false;
         }
 
         if (!nativeChaCha20) {
-            if (nativeCryptTrace != null) {
-                System.err.println("NativeChaCha20Cipher load - Native crypto library disabled.");
+            if (nativeCryptTrace) {
+                System.err.println("NativeChaCha20Cipher load - native crypto library disabled.");
             }
         } else {
             /*
@@ -130,7 +129,7 @@ public final class SunJCE extends Provider {
             if (!NativeCrypto.isLoaded()) {
                 nativeChaCha20 = false;
 
-                if (nativeCryptTrace != null) {
+                if (nativeCryptTrace) {
                     System.err.println("Warning: Native crypto library load failed." +
                             " Using Java crypto implementation");
                 }
@@ -140,14 +139,14 @@ public final class SunJCE extends Provider {
                 if (ossl_ver < 1) {
                     nativeChaCha20 = false;
 
-                    if (nativeCryptTrace != null) {
+                    if (nativeCryptTrace) {
                         System.err.println("Warning: Native ChaCha20 load failed." +
                                 " Need OpenSSL 1.1.0 or above for ChaCha20 support." +
                                 " Using Java crypto implementation");
                     }
                 } else {
-                    if (nativeCryptTrace != null) {
-                        System.err.println("NativeChaCha20Cipher load - using Native crypto library.");
+                    if (nativeCryptTrace) {
+                        System.err.println("NativeChaCha20Cipher load - using native crypto library.");
                     }
                 }
             }

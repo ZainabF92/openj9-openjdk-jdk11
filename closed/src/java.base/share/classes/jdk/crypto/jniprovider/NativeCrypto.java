@@ -33,9 +33,17 @@ import jdk.internal.ref.CleanerFactory;
 import jdk.internal.reflect.Reflection;
 import jdk.internal.reflect.CallerSensitive;
 
+import sun.security.action.GetPropertyAction;
+
 public class NativeCrypto {
 
     private static final Cleaner ECKeyCleaner = CleanerFactory.cleaner();
+
+    private static final boolean useNativeCrypto = Boolean.parseBoolean(
+            GetPropertyAction.privilegedGetProperty("jdk.nativeCrypto", "true"));
+
+    private static final boolean traceEnabled = Boolean.parseBoolean(
+            GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace"));
 
     //ossl_ver:
     // -1 : library load failed
@@ -44,7 +52,6 @@ public class NativeCrypto {
     private static final int ossl_ver = AccessController.doPrivileged(
             (PrivilegedAction<Integer>) () -> {
                 int ossl_ver = -1;
-                boolean traceEnabled = Boolean.getBoolean("jdk.nativeCryptoTrace");
 
                 try {
                     System.loadLibrary("jncrypto"); // check for native library
@@ -68,6 +75,56 @@ public class NativeCrypto {
 
     public static final int getVersion() {
         return ossl_ver;
+    }
+
+    /**
+     * Check whether native crypto is disabled with property.
+     *
+     * By default, the native crypto is enabled and uses the native
+     * crypto library implementation.
+     *
+     * The property 'jdk.nativeCrypto' is used to disable all native cryptos
+     * (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while the given
+     * property should be used to disable the given native crypto algorithm.
+     */
+    public static final boolean isAlgorithmEnabled(String property, String name) {
+        boolean useNativeAlgorithm = false;
+        if (useNativeCrypto) {
+            useNativeAlgorithm = Boolean.parseBoolean(
+                    GetPropertyAction.privilegedGetProperty(property, "true"));
+        }
+        if (useNativeAlgorithm) {
+            /*
+             * User wants to use the native crypto implementation.
+             * Make sure the native crypto library is loaded successfully.
+             * Otherwise, throw a warning message and fall back to the in-built
+             * java crypto implementation.
+             */
+            if (!loaded) {
+                useNativeAlgorithm = false;
+                if (traceEnabled) {
+                    System.err.println("Warning: Native crypto library load failed." +
+                            " Using Java crypto implementation");
+                }
+            } else {
+                if (traceEnabled) {
+                    System.err.println(name + " load - using native crypto library.");
+                }
+            }
+        } else {
+            if (traceEnabled) {
+                System.err.println(name + " load - native crypto library disabled.");
+            }
+        }
+        return useNativeAlgorithm;
+    }
+
+    public static final boolean isEnabled() {
+        return useNativeCrypto;
+    }
+
+    public static final boolean isTraceEnabled() {
+        return traceEnabled;
     }
 
     private NativeCrypto() {
@@ -292,5 +349,15 @@ public class NativeCrypto {
                                         int secretLen);
 
     public final native boolean ECNativeGF2m();
+
+    public final native int PBEDerive(byte[] passwd,
+                                      int passwdLength,
+                                      byte[] salt,
+                                      int saltLength,
+                                      byte[] key,
+                                      int iterations,
+                                      int n,
+                                      int id,
+                                      int hashAlgo);
 
 }
