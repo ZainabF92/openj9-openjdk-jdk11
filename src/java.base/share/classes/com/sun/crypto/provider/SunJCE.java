@@ -88,72 +88,11 @@ import sun.security.action.GetPropertyAction;
 
 public final class SunJCE extends Provider {
 
-    /*
-     * Check system properties to see whether native crypto should be enabled.
-     * By default, the native crypto is enabled and uses the native library.
-     * The property 'jdk.nativeChaCha20' is used to control native ChaCha20 alone
-     * and 'jdk.nativeCrypto' is used to control all native crypto implementations
-     * (Digest, CBC, GCM, ChaCha20, and EC).
+    /* The property 'jdk.nativeChaCha20' is used to disable native ChaCha20.
+     * ChaCha20 is only supported in OpenSSL 1.1.0 and above.
      */
-    private static final boolean useNativeChaCha20Cipher = nativeChaCha20Init();
-
-    private static boolean nativeChaCha20Init() {
-        boolean nativeChaCha20 = true;
-        boolean nativeCryptTrace = NativeCrypto.isTraceEnabled();
-
-        if (NativeCrypto.isEnabled()) {
-            String nativeChaCha20Str = GetPropertyAction.privilegedGetProperty("jdk.nativeChaCha20", "true");
-
-            if (!Boolean.parseBoolean(nativeChaCha20Str)) {
-                /* nativeChaCha20 is explicitly disabled */
-                nativeChaCha20 = false;
-            }
-        } else {
-             /* nativeCrypto is explicitly disabled */
-             nativeChaCha20 = false;
-        }
-
-        if (!nativeChaCha20) {
-            if (nativeCryptTrace) {
-                System.err.println("NativeChaCha20Cipher load - native crypto library disabled.");
-            }
-        } else {
-            /*
-             * User wants to use the native crypto implementation.
-             * Make sure the native crypto library is loaded successfully.
-             * Otherwise, issue a warning message and fall back to the built-in
-             * java crypto implementation.
-             *
-             * ChaCha20 is only supported in OpenSSL 1.1.0 and above.
-             */
-            if (!NativeCrypto.isLoaded()) {
-                nativeChaCha20 = false;
-
-                if (nativeCryptTrace) {
-                    System.err.println("Warning: Native crypto library load failed." +
-                            " Using Java crypto implementation");
-                }
-            } else {
-                final int ossl_ver = NativeCrypto.getVersion();
-
-                if (ossl_ver < 1) {
-                    nativeChaCha20 = false;
-
-                    if (nativeCryptTrace) {
-                        System.err.println("Warning: Native ChaCha20 load failed." +
-                                " Need OpenSSL 1.1.0 or above for ChaCha20 support." +
-                                " Using Java crypto implementation");
-                    }
-                } else {
-                    if (nativeCryptTrace) {
-                        System.err.println("NativeChaCha20Cipher load - using native crypto library.");
-                    }
-                }
-            }
-        }
-
-        return nativeChaCha20;
-    }
+    private static final boolean useNativeChaCha20Cipher = NativeCrypto.isAlgorithmEnabled("jdk.nativeChaCha20",
+            "NativeChaCha20Cipher", NativeCrypto.getVersion() >= 1, "Need OpenSSL 1.1.0 or above for ChaCha20 support.");
 
     private static final long serialVersionUID = 6812507587804302833L;
 

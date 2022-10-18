@@ -78,16 +78,40 @@ public class NativeCrypto {
     }
 
     /**
-     * Check whether native crypto is disabled with property.
-     *
-     * By default, the native crypto is enabled and uses the native
-     * crypto library implementation.
+     * Check whether native crypto is enabled. Note that, by default, native
+     * crypto is enabled (the native crypto library implementation is used).
      *
      * The property 'jdk.nativeCrypto' is used to disable all native cryptos
      * (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while the given
      * property should be used to disable the given native crypto algorithm.
+     *
+     * @param property the property used to disable the given algorithm
+     * @param name the name of the class or the algorithm
+     * @return whether the given native crypto algorithm is enabled
      */
     public static final boolean isAlgorithmEnabled(String property, String name) {
+        return isAlgorithmEnabled(property, name, true, null);
+    }
+
+    /**
+     * Check whether native crypto is enabled. Note that, by default, native
+     * crypto is enabled (the native crypto library implementation is used).
+     *
+     * The property 'jdk.nativeCrypto' is used to disable all native cryptos
+     * (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while the given
+     * property should be used to disable the given native crypto algorithm.
+     *
+     * This method is used for native cryptos that have additional requirements
+     * in order to load.
+     *
+     * @param property the property used to disable the given algorithm
+     * @param name the name of the class or the algorithm
+     * @param requirement whether the additional requirements are met
+     * @param explanation explanation if the native crypto is not loaded
+     *                    due to the additional requirement not being met
+     * @return whether the given native crypto algorithm is enabled
+     */
+    public static final boolean isAlgorithmEnabled(String property, String name, boolean requirement, String explanation) {
         boolean useNativeAlgorithm = false;
         if (useNativeCrypto) {
             useNativeAlgorithm = Boolean.parseBoolean(
@@ -95,20 +119,28 @@ public class NativeCrypto {
         }
         if (useNativeAlgorithm) {
             /*
-             * User wants to use the native crypto implementation.
-             * Make sure the native crypto library is loaded successfully.
-             * Otherwise, throw a warning message and fall back to the in-built
-             * java crypto implementation.
+             * User wants to use the native crypto implementation. Ensure that the
+             * that the native crypto library is loaded successfully. Otherwise,
+             * issue a warning message and fall back to the built-in java crypto
+             * implementation.
              */
             if (!loaded) {
                 useNativeAlgorithm = false;
                 if (traceEnabled) {
                     System.err.println("Warning: Native crypto library load failed." +
-                            " Using Java crypto implementation");
+                            " Using Java crypto implementation.");
                 }
             } else {
-                if (traceEnabled) {
-                    System.err.println(name + " load - using native crypto library.");
+                if (!requirement) {
+                    useNativeAlgorithm = false;
+                    if (traceEnabled) {
+                        System.err.println("Warning: " + name + " load failed. " +
+                                explanation + " Using Java crypto implementation.");
+                    }
+                } else {
+                    if (traceEnabled) {
+                        System.err.println(name + " load - using native crypto library.");
+                    }
                 }
             }
         } else {
@@ -350,14 +382,14 @@ public class NativeCrypto {
 
     public final native boolean ECNativeGF2m();
 
-    public final native int PBEDerive(byte[] passwd,
-                                      int passwdLength,
+    public final native int PBEDerive(byte[] password,
+                                      int passwordLength,
                                       byte[] salt,
                                       int saltLength,
                                       byte[] key,
                                       int iterations,
                                       int n,
                                       int id,
-                                      int hashAlgo);
+                                      int hashAlgorithm);
 
 }

@@ -2802,7 +2802,7 @@ setECPublicKey(EC_KEY *key, BIGNUM *x, BIGNUM *y, int field)
     return ret;
 }
 
-/* Password-based encryption algorithm
+/* Password-based encryption algorithm.
  *
  * Class:     jdk_crypto_jniprovider_NativeCrypto
  * Method:    PBEDerive
@@ -2810,53 +2810,53 @@ setECPublicKey(EC_KEY *key, BIGNUM *x, BIGNUM *y, int field)
  */
 JNIEXPORT jint JNICALL
 Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
-    (JNIEnv *env, jclass obj, jbyteArray passwd, jint passwdLength, jbyteArray salt, jint saltLength, jbyteArray key, jint iterations, jint n, jint id, jint hashAlgo)
+    (JNIEnv *env, jclass obj, jbyteArray password, jint passwordLength, jbyteArray salt, jint saltLength, jbyteArray key, jint iterations, jint n, jint id, jint hashAlgorithm)
 {
-    const EVP_MD *digestAlg = NULL;
-    char *nativePasswd = NULL;
+    const EVP_MD *digestAlgorithm = NULL;
+    char *nativePassword = NULL;
     unsigned char *nativeSalt = NULL;
     unsigned char *nativeKey = NULL;
     int ret = 0;
 
-    switch (hashAlgo) {
+    switch (hashAlgorithm) {
         case 1:
-            digestAlg = (*OSSL_sha1)();
+            digestAlgorithm = (*OSSL_sha1)();
             break;
         case 2:
-            digestAlg = (*OSSL_sha224)();
+            digestAlgorithm = (*OSSL_sha224)();
             break;
         case 3:
-            digestAlg = (*OSSL_sha256)();
+            digestAlgorithm = (*OSSL_sha256)();
             break;
         case 4:
-            digestAlg = (*OSSL_sha384)();
+            digestAlgorithm = (*OSSL_sha384)();
             break;
         case 5:
-            digestAlg = (*OSSL_sha512)();
+            digestAlgorithm = (*OSSL_sha512)();
             break;
         default:
             return -1;
     }
 
-    nativePasswd = (char*)((*env)->GetPrimitiveArrayCritical(env, passwd, 0));
-    if (NULL == nativePasswd) {
+    nativePassword = (char*)((*env)->GetPrimitiveArrayCritical(env, password, 0));
+    if (NULL == nativePassword) {
         return -1;
     }
     nativeSalt = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, salt, 0));
     if (NULL == nativeSalt) {
-        (*env)->ReleasePrimitiveArrayCritical(env, passwd, nativePasswd, JNI_ABORT);
+        (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
         return -1;
     }
     nativeKey = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, key, 0));
     if (NULL == nativeKey) {
-        (*env)->ReleasePrimitiveArrayCritical(env, passwd, nativePasswd, JNI_ABORT);
+        (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
         (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
         return -1;
     }
 
-    ret = (*OSSL_PKCS12_key_gen)(nativePasswd, passwdLength, nativeSalt, saltLength, id, iterations, n, nativeKey, digestAlg);
+    ret = (*OSSL_PKCS12_key_gen)(nativePassword, passwordLength, nativeSalt, saltLength, id, iterations, n, nativeKey, digestAlgorithm);
 
-    (*env)->ReleasePrimitiveArrayCritical(env, passwd, nativePasswd, JNI_ABORT);
+    (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
     (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
     (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
 
