@@ -708,19 +708,19 @@ JNIEXPORT jlong JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_DigestCreateCon
     OpenSSLMDContext *context = NULL;
 
     switch (algoIdx) {
-        case 0:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA1:
             digestAlg = (*OSSL_sha1)();
             break;
-        case 1:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA256:
             digestAlg = (*OSSL_sha256)();
             break;
-        case 2:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA224:
             digestAlg = (*OSSL_sha224)();
             break;
-        case 3:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA384:
             digestAlg = (*OSSL_sha384)();
             break;
-        case 4:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA512:
             digestAlg = (*OSSL_sha512)();
             break;
         default:
@@ -2819,19 +2819,19 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     int ret = 0;
 
     switch (hashAlgorithm) {
-        case 1:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA1:
             digestAlgorithm = (*OSSL_sha1)();
             break;
-        case 2:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA224:
             digestAlgorithm = (*OSSL_sha224)();
             break;
-        case 3:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA256:
             digestAlgorithm = (*OSSL_sha256)();
             break;
-        case 4:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA384:
             digestAlgorithm = (*OSSL_sha384)();
             break;
-        case 5:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA512:
             digestAlgorithm = (*OSSL_sha512)();
             break;
         default:
@@ -2844,25 +2844,28 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     }
     nativeSalt = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, salt, 0));
     if (NULL == nativeSalt) {
-        (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
     nativeKey = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, key, 0));
     if (NULL == nativeKey) {
-        (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
-        (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     ret = (*OSSL_PKCS12_key_gen)(nativePassword, passwordLength, nativeSalt, saltLength, id, iterations, n, nativeKey, digestAlgorithm);
 
+cleanup:
     (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
-    (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
-    (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+    if (nativeSalt) {
+        (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
+    }
+    if (nativeKey) {
+        (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
+    }
 
     if (1 != ret) {
         return -1;
     }
-
     return 0;
 }

@@ -101,19 +101,19 @@ final class PKCS12PBECipherCore {
         byte[] key = new byte[n];
 
         if (useNativePBE) {
-            int hashIndex = 0;
+            int hashIndex = -1;
             if (hashAlgo.equals("SHA") || hashAlgo.equals("SHA1") || hashAlgo.equals("SHA-1")) {
-                hashIndex = 1;
+                hashIndex = NativeCrypto.SHA1;
             } else if (hashAlgo.equals("SHA224") || hashAlgo.equals("SHA-224")) {
-                hashIndex = 2;
+                hashIndex = NativeCrypto.SHA224;
             } else if (hashAlgo.equals("SHA256") || hashAlgo.equals("SHA-256")) {
-                hashIndex = 3;
+                hashIndex = NativeCrypto.SHA256;
             } else if (hashAlgo.equals("SHA384") || hashAlgo.equals("SHA-384")) {
-                hashIndex = 4;
+                hashIndex = NativeCrypto.SHA384;
             } else if (hashAlgo.equals("SHA512") || hashAlgo.equals("SHA-512")) {
-                hashIndex = 5;
+                hashIndex = NativeCrypto.SHA512;
             }
-            if (hashIndex != 0) {
+            if (hashIndex != -1) {
                 if (nativeCrypto.PBEDerive(passwd, passwd.length, salt, salt.length, key, ic, n, type, hashIndex) != -1) {
                     return key;
                 } else if (nativeCryptTrace) {

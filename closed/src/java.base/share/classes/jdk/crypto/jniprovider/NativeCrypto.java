@@ -37,13 +37,20 @@ import sun.security.action.GetPropertyAction;
 
 public class NativeCrypto {
 
+    /* Define constants for the native digest algorithm indeces */
+    public static final int SHA1 = 0;
+    public static final int SHA256 = 1;
+    public static final int SHA224 = 2;
+    public static final int SHA384 = 3;
+    public static final int SHA512 = 4;
+
     private static final Cleaner ECKeyCleaner = CleanerFactory.cleaner();
 
     private static final boolean useNativeCrypto = Boolean.parseBoolean(
             GetPropertyAction.privilegedGetProperty("jdk.nativeCrypto", "true"));
 
     private static final boolean traceEnabled = Boolean.parseBoolean(
-            GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace"));
+            GetPropertyAction.privilegedGetProperty("jdk.nativeCryptoTrace", "false"));
 
     //ossl_ver:
     // -1 : library load failed
@@ -81,11 +88,13 @@ public class NativeCrypto {
      * Check whether native crypto is enabled. Note that, by default, native
      * crypto is enabled (the native crypto library implementation is used).
      *
-     * The property 'jdk.nativeCrypto' is used to disable all native cryptos
-     * (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while the given
-     * property should be used to disable the given native crypto algorithm.
+     * The property 'jdk.nativeCrypto' is used to control enablement of all
+     * native cryptos (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while
+     * the given property should be used to control enablement of the given
+     * native crypto algorithm.
      *
-     * @param property the property used to disable the given algorithm
+     * @param property the property used to control enablement of the given
+     *                 algorithm
      * @param name the name of the class or the algorithm
      * @return whether the given native crypto algorithm is enabled
      */
@@ -96,22 +105,24 @@ public class NativeCrypto {
     /**
      * Check whether native crypto is enabled. Note that, by default, native
      * crypto is enabled (the native crypto library implementation is used).
-     *
-     * The property 'jdk.nativeCrypto' is used to disable all native cryptos
-     * (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while the given
-     * property should be used to disable the given native crypto algorithm.
+
+     * The property 'jdk.nativeCrypto' is used to control enablement of all
+     * native cryptos (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while
+     * the given property should be used to control enablement of the given
+     * native crypto algorithm.
      *
      * This method is used for native cryptos that have additional requirements
      * in order to load.
      *
-     * @param property the property used to disable the given algorithm
+     * @param property the property used to control enablement of the given
+     *                 algorithm
      * @param name the name of the class or the algorithm
-     * @param requirement whether the additional requirements are met
+     * @param satisfied whether the additional requirements are met
      * @param explanation explanation if the native crypto is not loaded
-     *                    due to the additional requirement not being met
+     *                    due to the additional requirements not being met
      * @return whether the given native crypto algorithm is enabled
      */
-    public static final boolean isAlgorithmEnabled(String property, String name, boolean requirement, String explanation) {
+    public static final boolean isAlgorithmEnabled(String property, String name, boolean satisfied, String explanation) {
         boolean useNativeAlgorithm = false;
         if (useNativeCrypto) {
             useNativeAlgorithm = Boolean.parseBoolean(
@@ -124,23 +135,22 @@ public class NativeCrypto {
              * issue a warning message and fall back to the built-in java crypto
              * implementation.
              */
-            if (!loaded) {
+            if (loaded) {
+                if (satisfied) {
+                    if (traceEnabled) {
+                        System.err.println(name + " load - using native crypto library.");
+                    }
+                } else {
+                    useNativeAlgorithm = false;
+                    if (traceEnabled) {
+                        System.err.println(name + " load - " + explanation);
+                    }
+                }
+            } else {
                 useNativeAlgorithm = false;
                 if (traceEnabled) {
                     System.err.println("Warning: Native crypto library load failed." +
                             " Using Java crypto implementation.");
-                }
-            } else {
-                if (!requirement) {
-                    useNativeAlgorithm = false;
-                    if (traceEnabled) {
-                        System.err.println("Warning: " + name + " load failed. " +
-                                explanation + " Using Java crypto implementation.");
-                    }
-                } else {
-                    if (traceEnabled) {
-                        System.err.println(name + " load - using native crypto library.");
-                    }
                 }
             }
         } else {
