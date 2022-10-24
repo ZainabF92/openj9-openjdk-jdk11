@@ -67,7 +67,9 @@ public final class SunEC extends Provider {
     // (when native library is absent then fewer EC algorithms are available)
     private static boolean useFullImplementation = true;
 
-    /* The property 'jdk.nativeEC' is used to disable native EC. */
+    /* The property 'jdk.nativeEC' is used to control enablement of the native
+     * EC implementation.
+     */
     private static final boolean useNativeEC = NativeCrypto.isAlgorithmEnabled("jdk.nativeEC", "SunEC");
 
     static {

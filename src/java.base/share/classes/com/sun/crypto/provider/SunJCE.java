@@ -88,8 +88,8 @@ import sun.security.action.GetPropertyAction;
 
 public final class SunJCE extends Provider {
 
-    /* The property 'jdk.nativeChaCha20' is used to disable native ChaCha20.
-     * ChaCha20 is only supported in OpenSSL 1.1.0 and above.
+    /* The property 'jdk.nativeChaCha20' is used to control enablement of the native
+     * ChaCha20 implementation. ChaCha20 is only supported in OpenSSL 1.1.0 and above.
      */
     private static final boolean useNativeChaCha20Cipher = NativeCrypto.isAlgorithmEnabled("jdk.nativeChaCha20",
             "NativeChaCha20Cipher", NativeCrypto.getVersion() >= 1, "Need OpenSSL 1.1.0 or above for ChaCha20 support.");

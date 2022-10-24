@@ -708,19 +708,19 @@ JNIEXPORT jlong JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_DigestCreateCon
     OpenSSLMDContext *context = NULL;
 
     switch (algoIdx) {
-        case jdk_crypto_jniprovider_NativeCrypto_SHA1:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA1_160:
             digestAlg = (*OSSL_sha1)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA256:
-            digestAlg = (*OSSL_sha256)();
-            break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA224:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA2_224:
             digestAlg = (*OSSL_sha224)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA384:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA2_256:
+            digestAlg = (*OSSL_sha256)();
+            break;
+        case jdk_crypto_jniprovider_NativeCrypto_SHA5_384:
             digestAlg = (*OSSL_sha384)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA512:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA5_512:
             digestAlg = (*OSSL_sha512)();
             break;
         default:
@@ -2816,56 +2816,55 @@ Java_jdk_crypto_jniprovider_NativeCrypto_PBEDerive
     char *nativePassword = NULL;
     unsigned char *nativeSalt = NULL;
     unsigned char *nativeKey = NULL;
-    int ret = 0;
+    jint ret = -1;
 
     switch (hashAlgorithm) {
-        case jdk_crypto_jniprovider_NativeCrypto_SHA1:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA1_160:
             digestAlgorithm = (*OSSL_sha1)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA224:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA2_224:
             digestAlgorithm = (*OSSL_sha224)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA256:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA2_256:
             digestAlgorithm = (*OSSL_sha256)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA384:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA5_384:
             digestAlgorithm = (*OSSL_sha384)();
             break;
-        case jdk_crypto_jniprovider_NativeCrypto_SHA512:
+        case jdk_crypto_jniprovider_NativeCrypto_SHA5_512:
             digestAlgorithm = (*OSSL_sha512)();
             break;
         default:
-            return -1;
+            goto cleanup;
     }
 
     nativePassword = (char*)((*env)->GetPrimitiveArrayCritical(env, password, 0));
     if (NULL == nativePassword) {
-        return -1;
+        goto cleanup;
     }
     nativeSalt = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, salt, 0));
     if (NULL == nativeSalt) {
-        ret = -1;
         goto cleanup;
     }
     nativeKey = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, key, 0));
     if (NULL == nativeKey) {
-        ret = -1;
         goto cleanup;
     }
 
-    ret = (*OSSL_PKCS12_key_gen)(nativePassword, passwordLength, nativeSalt, saltLength, id, iterations, n, nativeKey, digestAlgorithm);
+    if (1 == (*OSSL_PKCS12_key_gen)(nativePassword, passwordLength, nativeSalt, saltLength, id, iterations, n, nativeKey, digestAlgorithm)) {
+        ret = 0;
+    }
 
 cleanup:
-    (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
-    if (nativeSalt) {
+    if (NULL != nativePassword) {
+        (*env)->ReleasePrimitiveArrayCritical(env, password, nativePassword, JNI_ABORT);
+    }
+    if (NULL != nativeSalt) {
         (*env)->ReleasePrimitiveArrayCritical(env, salt, nativeSalt, JNI_ABORT);
     }
-    if (nativeKey) {
+    if (NULL != nativeKey) {
         (*env)->ReleasePrimitiveArrayCritical(env, key, nativeKey, JNI_ABORT);
     }
 
-    if (1 != ret) {
-        return -1;
-    }
-    return 0;
+    return ret;
 }

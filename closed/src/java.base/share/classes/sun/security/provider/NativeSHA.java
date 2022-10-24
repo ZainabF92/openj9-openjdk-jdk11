@@ -38,6 +38,6 @@ public final class NativeSHA extends NativeDigest {
      * Creates a new native SHA object.
      */
     public NativeSHA() {
-        super("SHA-1", 20, NativeCrypto.SHA1);
+        super("SHA-1", 20, NativeCrypto.SHA1_160);
     }
 }

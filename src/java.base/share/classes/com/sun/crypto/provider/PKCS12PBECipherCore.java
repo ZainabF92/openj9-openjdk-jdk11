@@ -66,7 +66,9 @@ final class PKCS12PBECipherCore {
     private static final int DEFAULT_COUNT = 1024;
     private static final NativeCrypto nativeCrypto = NativeCrypto.getNativeCrypto();
     private static final boolean nativeCryptTrace = NativeCrypto.isTraceEnabled();
-    /* The property 'jdk.nativePBE' is used to disable native PBE. */
+    /* The property 'jdk.nativePBE' is used to control enablement of the native
+     * PBE implementation.
+     */
     private static final boolean useNativePBE = NativeCrypto.isAlgorithmEnabled("jdk.nativePBE", "PKCS12PBECipherCore");
 
     static final int CIPHER_KEY = 1;
@@ -101,19 +103,22 @@ final class PKCS12PBECipherCore {
         byte[] key = new byte[n];
 
         if (useNativePBE) {
-            int hashIndex = -1;
+            boolean hashSupported = true;
+            int hashIndex = 0;
             if (hashAlgo.equals("SHA") || hashAlgo.equals("SHA1") || hashAlgo.equals("SHA-1")) {
-                hashIndex = NativeCrypto.SHA1;
+                hashIndex = NativeCrypto.SHA1_160;
             } else if (hashAlgo.equals("SHA224") || hashAlgo.equals("SHA-224")) {
-                hashIndex = NativeCrypto.SHA224;
+                hashIndex = NativeCrypto.SHA2_224;
             } else if (hashAlgo.equals("SHA256") || hashAlgo.equals("SHA-256")) {
-                hashIndex = NativeCrypto.SHA256;
+                hashIndex = NativeCrypto.SHA2_256;
             } else if (hashAlgo.equals("SHA384") || hashAlgo.equals("SHA-384")) {
-                hashIndex = NativeCrypto.SHA384;
+                hashIndex = NativeCrypto.SHA5_384;
             } else if (hashAlgo.equals("SHA512") || hashAlgo.equals("SHA-512")) {
-                hashIndex = NativeCrypto.SHA512;
+                hashIndex = NativeCrypto.SHA5_512;
+            } else {
+                hashSupported = false;
             }
-            if (hashIndex != -1) {
+            if (hashSupported) {
                 if (nativeCrypto.PBEDerive(passwd, passwd.length, salt, salt.length, key, ic, n, type, hashIndex) != -1) {
                     return key;
                 } else if (nativeCryptTrace) {

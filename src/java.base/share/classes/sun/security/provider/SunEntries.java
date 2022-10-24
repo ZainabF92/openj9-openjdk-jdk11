@@ -86,7 +86,9 @@ import openj9.internal.security.FIPSConfigurator;
 
 public final class SunEntries {
 
-    /* The property 'jdk.nativeDigest' is used to disable native digest. */
+    /* The property 'jdk.nativeDigest' is used to control enablement of the native
+     * digest implementation.
+     */
     private static final boolean useNativeDigest = NativeCrypto.isAlgorithmEnabled("jdk.nativeDigest", "MessageDigest");
 
     // the default algo used by SecureRandom class for new SecureRandom() calls

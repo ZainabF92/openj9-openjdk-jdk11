@@ -40,7 +40,7 @@ abstract class NativeSHA2 {
     public static final class SHA224 extends NativeDigest {
 
         public SHA224() {
-            super("SHA-224", 28, NativeCrypto.SHA224);
+            super("SHA-224", 28, NativeCrypto.SHA2_224);
         }
     }
 
@@ -50,7 +50,7 @@ abstract class NativeSHA2 {
     public static final class SHA256 extends NativeDigest {
 
         public SHA256() {
-            super("SHA-256", 32, NativeCrypto.SHA256);
+            super("SHA-256", 32, NativeCrypto.SHA2_256);
         }
     }
 }

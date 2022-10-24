@@ -56,7 +56,9 @@ import sun.security.jca.JCAUtil;
  */
 public final class RSACore {
 
-    /* The property 'jdk.nativeRSA' is used to disable native RSA. */
+    /* The property 'jdk.nativeRSA' is used to control enablement of the native
+     * RSA implementation.
+     */
     private static boolean useNativeRsa = NativeCrypto.isAlgorithmEnabled("jdk.nativeRSA", "RSACore");
 
     // globally enable/disable use of blinding

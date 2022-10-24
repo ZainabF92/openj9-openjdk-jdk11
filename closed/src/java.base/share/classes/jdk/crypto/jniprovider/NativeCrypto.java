@@ -37,12 +37,12 @@ import sun.security.action.GetPropertyAction;
 
 public class NativeCrypto {
 
-    /* Define constants for the native digest algorithm indeces */
-    public static final int SHA1 = 0;
-    public static final int SHA256 = 1;
-    public static final int SHA224 = 2;
-    public static final int SHA384 = 3;
-    public static final int SHA512 = 4;
+    /* Define constants for the native digest algorithm indices. */
+    public static final int SHA1_160 = 0;
+    public static final int SHA2_224 = 1;
+    public static final int SHA2_256 = 2;
+    public static final int SHA5_384 = 3;
+    public static final int SHA5_512 = 4;
 
     private static final Cleaner ECKeyCleaner = CleanerFactory.cleaner();
 
@@ -105,7 +105,7 @@ public class NativeCrypto {
     /**
      * Check whether native crypto is enabled. Note that, by default, native
      * crypto is enabled (the native crypto library implementation is used).
-
+     *
      * The property 'jdk.nativeCrypto' is used to control enablement of all
      * native cryptos (Digest, CBC, GCM, RSA, ChaCha20, EC, and PBE), while
      * the given property should be used to control enablement of the given
@@ -131,19 +131,19 @@ public class NativeCrypto {
         if (useNativeAlgorithm) {
             /*
              * User wants to use the native crypto implementation. Ensure that the
-             * that the native crypto library is loaded successfully. Otherwise,
-             * issue a warning message and fall back to the built-in java crypto
-             * implementation.
+             * native crypto library is loaded successfully. Otherwise, issue a warning
+             * message and fall back to the built-in java crypto implementation.
              */
             if (loaded) {
                 if (satisfied) {
                     if (traceEnabled) {
-                        System.err.println(name + " load - using native crypto library.");
+                        System.err.println(name + " - using native crypto implementation.");
                     }
                 } else {
                     useNativeAlgorithm = false;
                     if (traceEnabled) {
-                        System.err.println(name + " load - " + explanation);
+                        System.err.println("Warning: " + name + "  native requirements not satisfied. " +
+                                explanation + " Using Java crypto implementation.");
                     }
                 }
             } else {
@@ -155,7 +155,8 @@ public class NativeCrypto {
             }
         } else {
             if (traceEnabled) {
-                System.err.println(name + " load - native crypto library disabled.");
+                System.err.println(name + " native crypto implementation disabled." +
+                        " Using Java crypto implementation.");
             }
         }
         return useNativeAlgorithm;

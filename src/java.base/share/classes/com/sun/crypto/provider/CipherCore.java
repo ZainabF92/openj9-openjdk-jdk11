@@ -61,8 +61,9 @@ import jdk.crypto.jniprovider.NativeCrypto;
 
 final class CipherCore {
 
-    /* The property 'jdk.nativeCBC' is used to disable native CBC
-     * and 'jdk.nativeGCM' is used to disable native GCM.
+    /* The property 'jdk.nativeCBC' is used to control enablement of the native
+     * CBC implementation and 'jdk.nativeGCM' is used to control enablement of
+     * the native GCM implementation.
      */
     private static final boolean useNativeCBC = NativeCrypto.isAlgorithmEnabled("jdk.nativeCBC", "CipherCore (CBC)");
     private static final boolean useNativeGCM = NativeCrypto.isAlgorithmEnabled("jdk.nativeGCM", "CipherCore (GCM)");
