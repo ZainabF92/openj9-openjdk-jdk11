@@ -726,33 +726,9 @@ public final class ServiceLoader<S>
         @Override
         public S get() {
             if (factoryMethod != null) {
-                // If the specified class extends java.security.Provider
-                // && the restricted security mode is enabled.
-                if (java.security.Provider.class
-                        .isAssignableFrom(factoryMethod.getDeclaringClass())
-                        && RestrictedSecurityConfigurator.isEnabled()) {
-                    // load provider if it is allowed in restricted security mode.
-                    if (RestrictedSecurityProperties.getInstance()
-                            .isProviderAllowed(factoryMethod.getDeclaringClass().getName())) {
-                        return invokeFactoryMethod();
-                    }
-                    // Do nothing (return provider = null) if it is not allowed.
-                    return null;
-                } else {
-                    return invokeFactoryMethod();
-                }
+                return invokeFactoryMethod();
             } else {
-                if (java.security.Provider.class
-                        .isAssignableFrom(ctor.getDeclaringClass())
-                        && RestrictedSecurityConfigurator.isEnabled()) {
-                    if (RestrictedSecurityProperties.getInstance()
-                            .isProviderAllowed(ctor.getDeclaringClass().getName())) {
-                        return newInstance();
-                    }
-                    return null;
-                } else {
-                    return newInstance();
-                }
+                return newInstance();
             }
         }
 
@@ -917,6 +893,14 @@ public final class ServiceLoader<S>
 
                 @SuppressWarnings("unchecked")
                 Class<? extends S> type = (Class<? extends S>) returnType;
+                // If the restricted security mode is enabled
+                // && the provider is NOT allowed in restricted security mode.
+                if (RestrictedSecurityConfigurator.isEnabled()
+                        && !RestrictedSecurityProperties.getInstance()
+                                .isProviderAllowed(clazz)) {
+                    // Then skip it.
+                    return null;
+                }
                 return new ProviderImpl<S>(service, type, factoryMethod, acc);
             }
         }
@@ -929,7 +913,15 @@ public final class ServiceLoader<S>
         @SuppressWarnings("unchecked")
         Class<? extends S> type = (Class<? extends S>) clazz;
         @SuppressWarnings("unchecked")
-        Constructor<? extends S> ctor = (Constructor<? extends S> ) getConstructor(clazz);
+        Constructor<? extends S> ctor = (Constructor<? extends S>) getConstructor(clazz);
+        // If the restricted security mode is enabled
+        // && the provider is NOT allowed in restricted security mode.
+        if (RestrictedSecurityConfigurator.isEnabled()
+                && !RestrictedSecurityProperties.getInstance()
+                        .isProviderAllowed(clazz)) {
+            // Then skip it.
+            return null;
+        }
         return new ProviderImpl<S>(service, type, ctor, acc);
     }
 
@@ -1264,6 +1256,14 @@ public final class ServiceLoader<S>
                         Class<? extends S> type = (Class<? extends S>) clazz;
                         Constructor<? extends S> ctor
                             = (Constructor<? extends S>)getConstructor(clazz);
+                        // If the restricted security mode is enabled
+                        // && the provider is NOT allowed in restricted security mode.
+                        if (RestrictedSecurityConfigurator.isEnabled()
+                                && !RestrictedSecurityProperties.getInstance()
+                                        .isProviderAllowed(clazz)) {
+                            // Then skip it.
+                            continue;
+                        }
                         ProviderImpl<S> p = new ProviderImpl<S>(service, type, ctor, acc);
                         nextProvider = (ProviderImpl<T>) p;
                     } else {

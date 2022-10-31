@@ -67,10 +67,12 @@ public final class RestrictedSecurityProperties {
     // Constraints for each provider. Key is the Provider Name, Value is the Constraints.
     private static Map<String, String[][]> providerConstraints = new HashMap<String, String[][]>();
 
-    private final String userSecurityNum;
+    private final int userSecurityNum;
     private final boolean userSecurityTrace;
     private final boolean userSecurityAudit;
     private final boolean userSecurityHelp;
+
+    private final String propsPrefix;
 
     // The java.security properties.
     private final Properties securityProps;
@@ -83,13 +85,15 @@ public final class RestrictedSecurityProperties {
      * @param audit the user security audit
      * @param help  the user security help
      */
-    private RestrictedSecurityProperties(String num, Properties props, boolean trace, boolean audit, boolean help) {
+    private RestrictedSecurityProperties(int num, Properties props, boolean trace, boolean audit, boolean help) {
 
         userSecurityNum = num;
         userSecurityTrace = trace;
         userSecurityAudit = audit;
         userSecurityHelp = help;
         securityProps = props;
+
+        propsPrefix = "RestrictedSecurity" + String.valueOf(userSecurityNum);
     }
 
     /**
@@ -102,7 +106,7 @@ public final class RestrictedSecurityProperties {
      * @param help  the user security help
      * @return the created RestrictedSecurityProperties instance
      */
-    public static RestrictedSecurityProperties createInstance(String num, Properties props, boolean trace,
+    public static RestrictedSecurityProperties createInstance(int num, Properties props, boolean trace,
             boolean audit, boolean help) {
         if (instance != null) {
             throw new RuntimeException(
@@ -143,7 +147,7 @@ public final class RestrictedSecurityProperties {
             // Print out the Help and Audit info.
             if (userSecurityHelp) {
                 printHelp();
-                if ("0".equals(userSecurityNum)) {
+                if (userSecurityNum == 0) {
                     if (debug != null) {
                         debug.println("Print out the help info and exit.");
                     }
@@ -152,7 +156,7 @@ public final class RestrictedSecurityProperties {
             }
             if (userSecurityAudit) {
                 listAudit();
-                if ("0".equals(userSecurityNum)) {
+                if (userSecurityNum == 0) {
                     if (debug != null) {
                         debug.println("Print out the audit info and exit.");
                     }
@@ -194,7 +198,7 @@ public final class RestrictedSecurityProperties {
 
         for (int pNum = 1;; ++pNum) {
             String providerInfo = securityProps
-                    .getProperty("RestrictedSecurity" + userSecurityNum + ".jce.provider." + pNum);
+                    .getProperty(propsPrefix + ".jce.provider." + pNum);
 
             if (providerInfo == null || providerInfo.trim().isEmpty()) {
                 break;
@@ -238,30 +242,30 @@ public final class RestrictedSecurityProperties {
             debug.println("Loading restricted security properties.");
         }
 
-        descName = securityProps.getProperty("RestrictedSecurity" + userSecurityNum + ".desc.name");
-        descNumber = securityProps.getProperty("RestrictedSecurity" + userSecurityNum + ".desc.number");
-        descPolicy = securityProps.getProperty("RestrictedSecurity" + userSecurityNum + ".desc.policy");
-        descSunsetDate = securityProps.getProperty("RestrictedSecurity" + userSecurityNum + ".desc.sunsetDate");
+        descName = securityProps.getProperty(propsPrefix + ".desc.name");
+        descNumber = securityProps.getProperty(propsPrefix + ".desc.number");
+        descPolicy = securityProps.getProperty(propsPrefix + ".desc.policy");
+        descSunsetDate = securityProps.getProperty(propsPrefix + ".desc.sunsetDate");
 
         jdkTlsDisabledNamedCurves = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".tls.disabledNamedCurves");
+                .getProperty(propsPrefix + ".tls.disabledNamedCurves");
         jdkTlsDisabledAlgorithms = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".tls.disabledAlgorithms");
+                .getProperty(propsPrefix + ".tls.disabledAlgorithms");
         jdkTlsDphemeralDHKeySize = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".tls.ephemeralDHKeySize");
+                .getProperty(propsPrefix + ".tls.ephemeralDHKeySize");
         jdkTlsLegacyAlgorithms = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".tls.legacyAlgorithms");
+                .getProperty(propsPrefix + ".tls.legacyAlgorithms");
         jdkCertpathDisabledAlgorithms = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".jce.certpath.disabledAlgorithms");
+                .getProperty(propsPrefix + ".jce.certpath.disabledAlgorithms");
         jdkSecurityLegacyAlgorithm = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".jce.legacyAlgorithms");
-        keyStoreType = securityProps.getProperty("RestrictedSecurity" + userSecurityNum + ".keystore.type");
-        keyStore = securityProps.getProperty("RestrictedSecurity" + userSecurityNum + ".javax.net.ssl.keyStore");
+                .getProperty(propsPrefix + ".jce.legacyAlgorithms");
+        keyStoreType = securityProps.getProperty(propsPrefix + ".keystore.type");
+        keyStore = securityProps.getProperty(propsPrefix + ".javax.net.ssl.keyStore");
 
         jdkSecureRandomProvider = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".securerandom.provider");
+                .getProperty(propsPrefix + ".securerandom.provider");
         jdkSecureRandomAlgorithm = securityProps
-                .getProperty("RestrictedSecurity" + userSecurityNum + ".securerandom.algorithm");
+                .getProperty(propsPrefix + ".securerandom.algorithm");
 
         if (debug != null) {
             debug.println("Loaded restricted security properties.");
@@ -281,7 +285,7 @@ public final class RestrictedSecurityProperties {
 
             String providerName = providersSN.get(pNum - 1);
             String providerInfo = securityProps
-                    .getProperty("RestrictedSecurity" + userSecurityNum + ".jce.provider." + pNum);
+                    .getProperty(propsPrefix + ".jce.provider." + pNum);
 
             if (debug != null) {
                 debug.println("Loading constraints for security provider: " + providerName);
@@ -304,7 +308,7 @@ public final class RestrictedSecurityProperties {
 
                     int dNum = 0;
                     for (String inConsDetail : inConstraint) {
-                        constraints[cNum][dNum] = notNullEmpty(inConsDetail) ? inConsDetail.trim() : "*";
+                        constraints[cNum][dNum] = !isNullOrBlank(inConsDetail) ? inConsDetail.trim() : "*";
                         dNum ++;
                     }
                     // If each input constraint doesn't have exactly three parts,
@@ -407,7 +411,7 @@ public final class RestrictedSecurityProperties {
     /**
      * Check if the provider is allowed in restricted security mode.
      *
-     * @param provider the provider to check
+     * @param providerName the provider to check
      * @return true if the provider is allowed
      */
     public boolean isProviderAllowed(String providerName) {
@@ -448,6 +452,26 @@ public final class RestrictedSecurityProperties {
     }
 
     /**
+     * Check if the provider is allowed in restricted security mode.
+     *
+     * @param providerClazz the provider class to check
+     * @return true if the provider is allowed
+     */
+    public boolean isProviderAllowed(Class<?> providerClazz) {
+
+        String providerName = providerClazz.getName();
+
+        // Check if the specified class extends java.security.Provider
+        if (!java.security.Provider.class.isAssignableFrom(providerClazz)) {
+            if (debug != null) {
+                debug.println("The provider class " + providerName + " does not extend java.security.Provider.");
+            }
+            return false;
+        }
+        return isProviderAllowed(providerName);
+    }
+
+    /**
      * List Audit info if userSecurityAudit is ture, default as false.
      */
     protected void listAudit() {
@@ -481,40 +505,40 @@ public final class RestrictedSecurityProperties {
         System.out.println();
         System.out.println("Restricted Security Trace Info:");
         System.out.println("===============================");
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".desc.name: " + descName);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".desc.number: " + descNumber);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".desc.policy: " + descPolicy);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".desc.sunsetDate: " + descSunsetDate);
+        System.out.println(propsPrefix + ".desc.name: " + descName);
+        System.out.println(propsPrefix + ".desc.number: " + descNumber);
+        System.out.println(propsPrefix + ".desc.policy: " + descPolicy);
+        System.out.println(propsPrefix + ".desc.sunsetDate: " + descSunsetDate);
         System.out.println();
 
         // List only restrictions.
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".tls.disabledNamedCurves: "
+        System.out.println(propsPrefix + ".tls.disabledNamedCurves: "
                 + jdkTlsDisabledNamedCurves);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".tls.disabledAlgorithms: "
+        System.out.println(propsPrefix + ".tls.disabledAlgorithms: "
                 + jdkTlsDisabledAlgorithms);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".tls.ephemeralDHKeySize: "
+        System.out.println(propsPrefix + ".tls.ephemeralDHKeySize: "
                 + jdkTlsDphemeralDHKeySize);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".tls.legacyAlgorithms: "
+        System.out.println(propsPrefix + ".tls.legacyAlgorithms: "
                 + jdkTlsLegacyAlgorithms);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".jce.certpath.disabledAlgorithms: "
+        System.out.println(propsPrefix + ".jce.certpath.disabledAlgorithms: "
                 + jdkCertpathDisabledAlgorithms);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".jce.legacyAlgorithms: "
+        System.out.println(propsPrefix + ".jce.legacyAlgorithms: "
                 + jdkSecurityLegacyAlgorithm);
         System.out.println();
 
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".keystore.type: "
+        System.out.println(propsPrefix + ".keystore.type: "
                 + keyStoreType);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".javax.net.ssl.keyStore: "
+        System.out.println(propsPrefix + ".javax.net.ssl.keyStore: "
                 + keyStore);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".securerandom.provider: "
+        System.out.println(propsPrefix + ".securerandom.provider: "
                 + jdkSecureRandomProvider);
-        System.out.println("RestrictedSecurity" + userSecurityNum + ".securerandom.algorithm: "
+        System.out.println(propsPrefix + ".securerandom.algorithm: "
                 + jdkSecureRandomAlgorithm);
 
         // List providers.
         System.out.println();
         for (int pNum = 1; pNum <= providers.size(); pNum++) {
-            System.out.println("RestrictedSecurity" + userSecurityNum + ".jce.provider." + pNum + ": "
+            System.out.println(propsPrefix + ".jce.provider." + pNum + ": "
                     + providers.get(pNum - 1));
         }
 
@@ -552,13 +576,13 @@ public final class RestrictedSecurityProperties {
     }
 
     /**
-     * Check if the input string is not null and empty.
+     * Check if the input string is null and empty.
      *
      * @param string the input string
-     * @return true if the input string is not null and emtpy
+     * @return true if the input string is null and emtpy
      */
-    private static boolean notNullEmpty(String string) {
-        return (string != null) && !string.trim().isEmpty();
+    private static boolean isNullOrBlank(String string) {
+        return (string == null) || string.isBlank();
     }
 
     /**

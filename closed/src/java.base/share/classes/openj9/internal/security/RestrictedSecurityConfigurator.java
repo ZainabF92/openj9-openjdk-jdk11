@@ -21,7 +21,6 @@
  *
  * ===========================================================================
  */
-
 package openj9.internal.security;
 
 import java.security.AccessController;
@@ -29,9 +28,9 @@ import java.security.PrivilegedAction;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
@@ -52,12 +51,12 @@ public final class RestrictedSecurityConfigurator {
     private static final String userSecuritySetting;
     private static final boolean userEnabledFIPS;
 
-    private static String userSecurityNum = "0";
+    private static int userSecurityNum = 0;
     private static boolean userSecurityTrace;
     private static boolean userSecurityAudit;
     private static boolean userSecurityHelp;
 
-    private static final String[] supportPlatforms = {"amd64"};
+    private static final List<String> supportPlatforms = List.of("amd64");
 
     static {
         String[] props = AccessController.doPrivileged(
@@ -73,9 +72,9 @@ public final class RestrictedSecurityConfigurator {
         userEnabledFIPS = Boolean.parseBoolean(props[0]);
         // If semeru.fips is true, then ignore semeru.restrictedsecurity, use userSecurityNum 1.
         userSecuritySetting = userEnabledFIPS ? "1" : props[1];
-        userEnabledSecurity = notNullEmpty(userSecuritySetting);
+        userEnabledSecurity = !isNullOrBlank(userSecuritySetting);
         isSecuritySupported = "Linux".equalsIgnoreCase(props[2])
-                && Arrays.asList(supportPlatforms).contains(props[3]);
+                && supportPlatforms.contains(props[3]);
         shouldEnableSecurity = (userEnabledFIPS || userEnabledSecurity) && isSecuritySupported;
     }
 
@@ -130,8 +129,8 @@ public final class RestrictedSecurityConfigurator {
                 }
 
                 // Check secure random settings.
-                if (!notNullEmpty(restricts.getJdkSecureRandomProvider())
-                        || !notNullEmpty(restricts.getJdkSecureRandomAlgorithm())) {
+                if (isNullOrBlank(restricts.getJdkSecureRandomProvider())
+                        || isNullOrBlank(restricts.getJdkSecureRandomAlgorithm())) {
                     new RuntimeException("Restricted security mode secure random is null.")
                             .printStackTrace();
                     System.exit(1);
@@ -200,20 +199,19 @@ public final class RestrictedSecurityConfigurator {
                 userSecurityTrace = true;
             } else {
                 try {
-                    Integer.parseInt(in);
+                    userSecurityNum = Integer.parseInt(in);
                 } catch (NumberFormatException e) {
                     new RuntimeException("user restricted security setting " + userSecuritySetting + " incorrect.")
                             .printStackTrace();
                     System.exit(1);
                 }
-                userSecurityNum = in;
             }
         }
 
         if (debug != null) {
-            debug.println("Loaded user restricted security settings, with userSecurityNum: " + userSecurityNum
-                    + " userSecurityTrace: " + userSecurityTrace + " userSecurityAudit: " + userSecurityAudit
-                    + " userSecurityHelp: " + userSecurityHelp);
+            debug.println("Loaded user restricted security settings, with userSecurityNum: "
+                    + String.valueOf(userSecurityNum) + " userSecurityTrace: " + userSecurityTrace
+                    + " userSecurityAudit: " + userSecurityAudit + " userSecurityHelp: " + userSecurityHelp);
         }
     }
 
@@ -263,23 +261,25 @@ public final class RestrictedSecurityConfigurator {
             String jdkPropsName = entry.getKey();
             String propsNewValue = entry.getValue();
 
-            String propsOldValue = notNullEmpty(props.getProperty(jdkPropsName)) ? props.getProperty(jdkPropsName) : "";
+            String propsOldValue = !isNullOrBlank(props.getProperty(jdkPropsName)) ? props.getProperty(jdkPropsName) : "";
 
-            if (notNullEmpty(propsNewValue)) {
-                props.setProperty(jdkPropsName,
-                        notNullEmpty(propsOldValue) ? propsOldValue + ", " + propsNewValue : propsNewValue);
+            if (!isNullOrBlank(propsNewValue)) {
+                String values = !isNullOrBlank(propsOldValue) ? propsOldValue + ", " + propsNewValue : propsNewValue;
+                props.setProperty(jdkPropsName, values);
                 if (debug != null) {
                     debug.println("Added restricted security properties, with property: " + jdkPropsName + " values: "
-                            + (notNullEmpty(propsOldValue) ? propsOldValue + ", " + propsNewValue : propsNewValue));
+                            + values);
                 }
             }
         }
 
         // For keyStore and keystore.type, old value not needed, just set the new value.
-        if (notNullEmpty(properties.getKeyStoreType()))
+        if (!isNullOrBlank(properties.getKeyStoreType())) {
             props.setProperty("keystore.type", properties.getKeyStoreType());
-        if (notNullEmpty(properties.getKeyStore()))
+        }
+        if (!isNullOrBlank(properties.getKeyStore())) {
             System.setProperty("javax.net.ssl.keyStore", properties.getKeyStore());
+        }
     }
 
     /**
@@ -292,9 +292,8 @@ public final class RestrictedSecurityConfigurator {
 
         boolean isSunset = false;
         try {
-            if (LocalDate.parse(descSunsetDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")).isBefore(LocalDate.now())) {
-                isSunset = true;
-            }
+            isSunset = LocalDate.parse(descSunsetDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                    .isBefore(LocalDate.now());
         } catch (Exception except) {
             new RuntimeException(
                     "Restricted security policy sunset date is inccorect, the correct format is yyyy-MM-dd.")
@@ -305,17 +304,16 @@ public final class RestrictedSecurityConfigurator {
         if (debug != null) {
             debug.println("Restricted security policy is sunset: " + isSunset);
         }
-
         return isSunset;
     }
 
     /**
-     * Check if the input string is not null and empty.
+     * Check if the input string is null and empty.
      *
      * @param string the input string
-     * @return true if the input string is not null and emtpy
+     * @return true if the input string is null and emtpy
      */
-    private static boolean notNullEmpty(String string) {
-        return (string != null) && !string.trim().isEmpty();
+    private static boolean isNullOrBlank(String string) {
+        return (string == null) || string.isBlank();
     }
 }
