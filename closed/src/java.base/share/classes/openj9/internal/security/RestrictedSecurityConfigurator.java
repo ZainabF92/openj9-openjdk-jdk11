@@ -37,6 +37,10 @@ import java.util.Properties;
 
 import sun.security.util.Debug;
 
+/*[IF CRIU_SUPPORT]*/
+import openj9.internal.criu.InternalCRIUSupport;
+/*[ENDIF] CRIU_SUPPORT*/
+
 /**
  * Configures the security providers when in restricted security mode.
  */
@@ -47,9 +51,8 @@ public final class RestrictedSecurityConfigurator {
     // Restricted security mode enable check, only supported on Linux x64.
     private static final boolean userEnabledSecurity;
     private static final boolean isSecuritySupported;
-    private static final boolean shouldEnableSecurity;
     private static final String userSecuritySetting;
-    private static final boolean userEnabledFIPS;
+    private static boolean shouldEnableSecurity;
 
     private static int userSecurityNum = 0;
     private static boolean userSecurityTrace;
@@ -69,13 +72,21 @@ public final class RestrictedSecurityConfigurator {
                                 System.getProperty("os.arch") };
                     }
                 });
-        userEnabledFIPS = Boolean.parseBoolean(props[0]);
+        String securitySetting = props[1];
         // If semeru.fips is true, then ignore semeru.restrictedsecurity, use userSecurityNum 1.
-        userSecuritySetting = userEnabledFIPS ? "1" : props[1];
+        if (Boolean.parseBoolean(props[0])) {
+            securitySetting = "1";
+        }
+/*[IF CRIU_SUPPORT]*/
+        if (InternalCRIUSupport.isCheckpointAllowed()) {
+            securitySetting = "2";
+        }
+/*[ENDIF] CRIU_SUPPORT*/
+        userSecuritySetting = securitySetting;
         userEnabledSecurity = !isNullOrBlank(userSecuritySetting);
         isSecuritySupported = "Linux".equalsIgnoreCase(props[2])
                 && supportPlatforms.contains(props[3]);
-        shouldEnableSecurity = (userEnabledFIPS || userEnabledSecurity) && isSecuritySupported;
+        shouldEnableSecurity = userEnabledSecurity && isSecuritySupported;
     }
 
     private RestrictedSecurityConfigurator() {
@@ -84,13 +95,22 @@ public final class RestrictedSecurityConfigurator {
 
     /**
      * Restricted security mode will be enabled only if the semeru.fips system
-     * property is true (default as false).
+     * property is true (default as false) or semeru.restrictedsecurity is set.
      *
      * @return true if restricted security is enabled
      */
     public static boolean isEnabled() {
         return shouldEnableSecurity;
     }
+
+/* [IF CRIU_SUPPORT] */
+    /**
+     * Disables the restricted security mode.
+     */
+    public static void disable() {
+        shouldEnableSecurity = false;
+    }
+/* [ENDIF] CRIU_SUPPORT */
 
     /**
      * Remove the security providers and only add the restricted security providers.
@@ -102,7 +122,7 @@ public final class RestrictedSecurityConfigurator {
         boolean loadedProps = false;
 
         // Check if restricted security is supported on this platform.
-        if ((userEnabledFIPS || userEnabledSecurity) && !isSecuritySupported) {
+        if (userEnabledSecurity && !isSecuritySupported) {
             new RuntimeException("Restricted security mode is not supported on this platform.")
                     .printStackTrace();
             System.exit(1);
@@ -308,10 +328,10 @@ public final class RestrictedSecurityConfigurator {
     }
 
     /**
-     * Check if the input string is null and empty.
+     * Check if the input string is null or empty.
      *
      * @param string the input string
-     * @return true if the input string is null and emtpy
+     * @return true if the input string is null or emtpy
      */
     private static boolean isNullOrBlank(String string) {
         return (string == null) || string.isBlank();
