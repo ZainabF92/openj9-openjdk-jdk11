@@ -148,7 +148,7 @@ RestrictedSecurity2.tls.legacyAlgorithms =
 
 RestrictedSecurity2.jce.certpath.disabledAlgorithms =
 RestrictedSecurity2.jce.legacyAlgorithms =
-RestrictedSecurity2.jce.provider.1 = openj9.internal.criu.CRIUSECProvider
+RestrictedSecurity2.jce.provider.1 = openj9.internal.criu.CRIUSEC
 
 RestrictedSecurity2.keystore.type =
 RestrictedSecurity2.javax.net.ssl.keyStore =

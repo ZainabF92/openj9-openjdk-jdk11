@@ -218,6 +218,11 @@ public final class RestrictedSecurityProperties {
             pos = providerName.indexOf(' ');
             providerName = (pos < 0) ? providerName.trim() : providerName.substring(0, pos).trim();
             // Provider without argument.
+
+             // Remove the provider class package name if there is.
+            pos = providerName.lastIndexOf('.');
+            providerName = (pos > 0) ? providerName.substring(pos + 1, providerName.length()) : providerName;
+
             providersSN.add(pNum - 1, providerName);
 
             if (debug != null) {
