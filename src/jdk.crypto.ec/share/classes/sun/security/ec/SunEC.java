@@ -148,7 +148,11 @@ public final class SunEC extends Provider {
                     }
                 } else  if (type.equals("KeyPairGenerator")) {
                     if (algo.equals("EC")) {
-                        return new ECKeyPairGenerator();
+                        if (useNativeEC) {
+                            return new NativeECKeyPairGenerator();
+                        } else {
+                            return new ECKeyPairGenerator();
+                        }
                     } else if (algo.equals("XDH")) {
                         return new XDHKeyPairGenerator();
                     } else if (algo.equals("X25519")) {
@@ -355,9 +359,15 @@ public final class SunEC extends Provider {
             /*
              * Key Pair Generator engine
              */
-            putService(new ProviderService(this, "KeyPairGenerator",
-                "EC", "sun.security.ec.ECKeyPairGenerator",
-                new String[] { "EllipticCurve" }, ATTRS));
+            if (useNativeEC) {
+                putService(new ProviderService(this, "KeyPairGenerator",
+                    "EC", "sun.security.ec.NativeECKeyPairGenerator",
+                    new String[] { "EllipticCurve" }, ATTRS));
+            } else {
+                putService(new ProviderService(this, "KeyPairGenerator",
+                    "EC", "sun.security.ec.ECKeyPairGenerator",
+                    new String[] { "EllipticCurve" }, ATTRS));
+            }
 
             /*
              * Key Agreement engine

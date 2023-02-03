@@ -342,6 +342,14 @@ public class NativeCrypto {
                                        int tagLen);
 
     /* Native EC interfaces */
+    public final native int ECGenerateKeyPair(long key,
+                                              byte[] x,
+                                              int xLen,
+                                              byte[] y,
+                                              int yLen,
+                                              byte[] s,
+                                              int sLen);
+
     public final native int ECCreatePublicKey(long key,
                                               byte[] x,
                                               int xLen,
@@ -393,6 +401,7 @@ public class NativeCrypto {
 
     public final native boolean ECNativeGF2m();
 
+    /* Native PBE interfaces */
     public final native int PBEDerive(byte[] password,
                                       int passwordLength,
                                       byte[] salt,

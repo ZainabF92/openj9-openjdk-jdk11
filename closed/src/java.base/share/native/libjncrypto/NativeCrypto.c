@@ -113,6 +113,7 @@ typedef BIGNUM* OSSL_BN_bin2bn_t (const unsigned char *, int, BIGNUM *);
 typedef void OSSL_BN_set_negative_t (BIGNUM *, int);
 typedef void OSSL_BN_free_t (BIGNUM *);
 
+typedef int OSSL_EC_KEY_generate_key_t(EC_KEY *);
 typedef void OSSL_EC_KEY_free_t(EC_KEY *);
 typedef int OSSL_ECDH_compute_key_t(void *, size_t, const EC_POINT *, EC_KEY *, void *(*KDF)(const void *, size_t, void *, size_t *));
 typedef const EC_POINT* OSSL_EC_KEY_get0_public_key_t(const EC_KEY *);
@@ -216,6 +217,7 @@ OSSL_cipher_t* OSSL_chacha20;
 OSSL_cipher_t* OSSL_chacha20_poly1305;
 
 /* Define pointers for OpenSSL functions to handle EC algorithm. */
+OSSL_EC_KEY_generate_key_t* OSSL_EC_KEY_generate_key;
 OSSL_EC_KEY_free_t* OSSL_EC_KEY_free;
 OSSL_ECDH_compute_key_t* OSSL_ECDH_compute_key;
 OSSL_EC_KEY_get0_public_key_t* OSSL_EC_KEY_get0_public_key;
@@ -428,6 +430,7 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
     OSSL_BN_free = (OSSL_BN_free_t *)find_crypto_symbol(crypto_library, "BN_free");
 
     /* Load the functions symbols for OpenSSL EC algorithm. */
+    OSSL_EC_KEY_generate_key = (OSSL_EC_KEY_generate_key_t*)find_crypto_symbol(crypto_library, "EC_KEY_generate_key");
     OSSL_EC_KEY_free = (OSSL_EC_KEY_free_t*)find_crypto_symbol(crypto_library, "EC_KEY_free");
     OSSL_ECDH_compute_key = (OSSL_ECDH_compute_key_t*)find_crypto_symbol(crypto_library, "ECDH_compute_key");
     OSSL_EC_KEY_get0_public_key = (OSSL_EC_KEY_get0_public_key_t*)find_crypto_symbol(crypto_library, "EC_KEY_get0_public_key");
@@ -511,6 +514,7 @@ JNIEXPORT jint JNICALL Java_jdk_crypto_jniprovider_NativeCrypto_loadCrypto
         (NULL == OSSL_BN_bin2bn) ||
         (NULL == OSSL_BN_set_negative) ||
         (NULL == OSSL_BN_free) ||
+        (NULL == OSSL_EC_KEY_generate_key) ||
         (NULL == OSSL_EC_KEY_free) ||
         (NULL == OSSL_ECDH_compute_key) ||
         (NULL == OSSL_EC_KEY_get0_public_key) ||
@@ -2265,6 +2269,84 @@ Java_jdk_crypto_jniprovider_NativeCrypto_ECNativeGF2m
 {
     return OSSL_ECGF2M;
 }
+
+
+/* Generate an EC Key Pair
+ *
+ * Class:     jdk_crypto_jniprovider_NativeCrypto
+ * Method:    ECGenerateKeyPair
+ * Signature: (J[BI[BI[BI)I
+ */
+JNIEXPORT jint JNICALL
+Java_jdk_crypto_jniprovider_NativeCrypto_ECGenerateKeyPair
+  (JNIEnv *env, jclass obj, jlong key, jbyteArray x, jint xLen, jbyteArray y, jint yLen, jbyteArray s, jint sLen)
+{
+    unsigned char *nativeX = NULL;
+    unsigned char *nativeY = NULL;
+    unsigned char *nativeS = NULL;
+    EC_KEY *nativeKey = (EC_KEY*)(intptr_t) key;
+    EC_POINT *publicKey = NULL;
+    BIGNUM *xBN = NULL;
+    BIGNUM *yBN = NULL;
+    BIGNUM *sBN = NULL;
+    jint ret = -1;
+
+    nativeX = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, x, 0));
+    if (NULL == nativeX) {
+        goto cleanup;
+    }
+
+    nativeY = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, y, 0));
+    if (NULL == nativeY) {
+        goto cleanup;
+    }
+
+    nativeS = (unsigned char*)((*env)->GetPrimitiveArrayCritical(env, s, 0));
+    if (NULL == nativeS) {
+        goto cleanup;
+    }
+
+    if (0 == (*OSSL_EC_KEY_generate_key)(nativeKey)) {
+        goto cleanup;
+    }
+
+    /* TODO:
+    // to translate the public key to java format, we need to extract the public key coordinates:
+    publicKey = (*OSSL_EC_KEY_get0_public_key)(nativeKey);
+    (*OSSL_EC_POINT_get_affine_coordinates)((*OSSL_EC_KEY_get0_group)(key), publicKey, xBN, yBN, (*OSSL_BN_CTX_new)());
+    // to translate the private key to java format, we need the private key
+    sBN = (*OSSL_EC_KEY_get0_private_key)(nativeKey);
+
+    // we need to convert the BIGNUMs to Java BigIntegers (I put the non-existent method "convert" as a placeholder)
+    // I think we can use the method BN_signed_bn2bin
+    xBN = convert(nativeX, xLen);
+    yBN = convert(nativeY, yLen);
+    sBN = convert(nativeS, sLen);
+
+    if ((NULL == xBN) || (NULL == yBN) || (NULL == sBN)) {
+        goto cleanup;
+    }
+
+    // I do not think it is a good idea that the public key and private key share the same pointer below
+    */
+
+    ret = (jlong)(intptr_t)nativeKey;
+
+cleanup:
+    if (NULL != nativeX) {
+        (*env)->ReleasePrimitiveArrayCritical(env, x, nativeX, JNI_ABORT);
+    }
+    if (NULL != nativeY) {
+        (*env)->ReleasePrimitiveArrayCritical(env, y, nativeY, JNI_ABORT);
+    }
+    if (NULL != nativeS) {
+        (*env)->ReleasePrimitiveArrayCritical(env, s, nativeS, JNI_ABORT);
+    }
+
+    return ret;
+}
+
+/* TODO: the EC methods below need to follow the new way of error handling */
 
 /* Create an EC Public Key
  *

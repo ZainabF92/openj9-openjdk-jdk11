@@ -45,8 +45,6 @@ import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.InvalidParameterSpecException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.crypto.KeyAgreementSpi;
 import javax.crypto.SecretKey;
@@ -63,13 +61,6 @@ import sun.security.util.NamedCurve;
 public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
 
     private static final NativeCrypto nativeCrypto = NativeCrypto.getNativeCrypto();
-    private static final boolean nativeCryptTrace = NativeCrypto.isTraceEnabled();
-
-    /* false if OPENSSL_NO_EC2M is defined, true otherwise */
-    private static final boolean nativeGF2m = nativeCrypto.ECNativeGF2m();
-
-    /* stores whether a curve is supported by OpenSSL (true) or not (false) */
-    private static final Map<String, Boolean> curveSupported = new ConcurrentHashMap<>();
 
     /* private key, if initialized */
     private ECPrivateKeyImpl privateKey;
@@ -106,36 +97,15 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
             this.publicKey = null;
 
             ECParameterSpec params = this.privateKey.getParams();
-            if (params instanceof NamedCurve) {
-                this.curve = ((NamedCurve) params).getName();
-            } else {
-                /* use the OID */
-                try {
-                    AlgorithmParameters algParams = AlgorithmParameters.getInstance("EC");
-                    algParams.init(params);
-                    this.curve = algParams.getParameterSpec(ECGenParameterSpec.class).getName();
-                } catch (InvalidParameterSpecException | NoSuchAlgorithmException e) {
-                    /* should not happen */
-                    throw new InternalError(e);
-                }
-            }
-
-            if ((!nativeGF2m) && this.privateKey.isECFieldF2m()) {
-                /* only print the first time a curve is used */
-                if ((curveSupported.putIfAbsent("EC2m", Boolean.FALSE) == null) && nativeCryptTrace) {
-                    System.err.println("EC2m is not supported by OpenSSL, using Java crypto implementation.");
-                }
-                this.initializeJavaImplementation(key, random);
-            } else if (Boolean.FALSE.equals(curveSupported.get(this.curve))) {
-                this.initializeJavaImplementation(key, random);
-            } else {
+            this.curve = NativeECUtil.getCurveName(params);
+            if (NativeECUtil.isCurveSupported(this.curve, params)) {
                 this.javaImplementation = null;
+            } else {
+                this.initializeJavaImplementation(key, random);
             }
         } else {
-            if ((curveSupported.putIfAbsent("ECKeyImpl", Boolean.FALSE) == null) && nativeCryptTrace) {
-                System.err.println("Only ECPrivateKeyImpl and ECPublicKeyImpl are supported by the native implementation,"
-                        + " using Java crypto implementation.");
-            }
+            NativeECUtil.putCurveIfAbsent("ECKeyImpl", Boolean.FALSE, "Only ECPrivateKeyImpl and ECPublicKeyImpl"
+                    + " are supported by the native implementation, using Java crypto implementation.");
             this.initializeJavaImplementation(key, random);
         }
     }
@@ -180,10 +150,8 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
 
             return null;
         } else {
-            if ((curveSupported.putIfAbsent("ECKeyImpl", Boolean.FALSE) == null) && nativeCryptTrace) {
-                System.err.println("Only ECPrivateKeyImpl and ECPublicKeyImpl are supported by the native implementation,"
-                        + " using Java crypto implementation.");
-            }
+            NativeECUtil.putCurveIfAbsent("ECKeyImpl", Boolean.FALSE, "Only ECPrivateKeyImpl and ECPublicKeyImpl"
+                    + " are supported by the native implementation, using Java crypto implementation.");
             this.initializeJavaImplementation(this.privateKey, null);
             return this.javaImplementation.engineDoPhase(key, lastPhase);
         }
@@ -221,11 +189,9 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
         long nativePublicKey = this.publicKey.getNativePtr();
         long nativePrivateKey = this.privateKey.getNativePtr();
         if ((nativePublicKey == -1) || (nativePrivateKey == -1)) {
-            if (curveSupported.putIfAbsent(this.curve, Boolean.FALSE) != null) {
+            if (!NativeECUtil.putCurveIfAbsent(this.curve, Boolean.FALSE, this.curve +
+                    " is not supported by OpenSSL, using Java crypto implementation.")) {
                 throw new ProviderException("Could not convert keys to native format");
-            }
-            if (nativeCryptTrace) {
-                System.err.println(this.curve + " is not supported by OpenSSL, using Java crypto implementation.");
             }
             try {
                 this.initializeJavaImplementation(this.privateKey, null);
@@ -236,9 +202,8 @@ public final class NativeECDHKeyAgreement extends KeyAgreementSpi {
             }
             return this.javaImplementation.engineGenerateSecret(sharedSecret, offset);
         }
-        if ((curveSupported.putIfAbsent(this.curve, Boolean.TRUE) == null) && nativeCryptTrace) {
-            System.err.println(this.curve + " is supported by OpenSSL, using native crypto implementation.");
-        }
+        NativeECUtil.putCurveIfAbsent(this.curve, Boolean.TRUE, this.curve + 
+                " is supported by OpenSSL, using native crypto implementation.");
         int ret;
         synchronized (this.privateKey) {
             ret = nativeCrypto.ECDeriveKey(nativePublicKey, nativePrivateKey, sharedSecret, offset, this.secretLen);
